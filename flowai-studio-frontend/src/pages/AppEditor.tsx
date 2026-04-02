@@ -44,13 +44,17 @@ const AppEditor: React.FC = () => {
           const workflows = await fetchWorkflows(appId) as any
           
           if (workflows && workflows.length > 0) {
-            await fetchWorkflowById(workflows[0].id)
+            const preferredWorkflow =
+              workflows.find((workflow: any) => workflow.name?.includes('RAG')) ||
+              workflows[0]
+            await fetchWorkflowById(preferredWorkflow.id)
           } else {
             // 如果没有工作流，创建一个默认的
-            await createWorkflow(appId, { 
+            const createdWorkflow = await createWorkflow(appId, { 
               name: '默认工作流', 
               description: '自动创建的默认工作流' 
             })
+            await fetchWorkflowById(createdWorkflow.id)
           }
         } catch (error) {
           message.error('初始化编辑器失败')

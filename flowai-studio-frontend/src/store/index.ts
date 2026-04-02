@@ -1,14 +1,18 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { UserSlice, createUserSlice } from './slices/userSlice'
+import { createUserSlice } from './slices/userSlice'
 import { AppSlice, createAppSlice } from './slices/appSlice'
 import { WorkflowSlice, createWorkflowSlice } from './slices/workflowSlice'
 import { GlobalSlice, createGlobalSlice } from './slices/globalSlice'
 import { RAGSlice, createRAGSlice } from './slices/ragSlice'
 import { SkillSlice, createSkillSlice } from './slices/skillSlice'
 
-// 组合所有store切片
-type StoreState = UserSlice & AppSlice & WorkflowSlice & GlobalSlice & RAGSlice & SkillSlice
+type StoreState = ReturnType<typeof createUserSlice> &
+  ReturnType<typeof createAppSlice> &
+  ReturnType<typeof createWorkflowSlice> &
+  ReturnType<typeof createGlobalSlice> &
+  ReturnType<typeof createRAGSlice> &
+  ReturnType<typeof createSkillSlice>
 
 export const useStore = create<StoreState>()(
   persist(

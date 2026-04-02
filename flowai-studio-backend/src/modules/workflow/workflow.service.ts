@@ -7,6 +7,27 @@ import { UpdateWorkflowDto } from './dto/update-workflow.dto';
 export class WorkflowService {
   constructor(private prisma: PrismaService) {}
 
+  private serializeWorkflow<T extends { nodes: string; edges: string; variables?: string | null }>(
+    workflow: T,
+  ) {
+    return {
+      ...workflow,
+      nodes: this.parseJsonField(workflow.nodes, []),
+      edges: this.parseJsonField(workflow.edges, []),
+      variables: workflow.variables
+        ? this.parseJsonField(workflow.variables, {})
+        : null,
+    };
+  }
+
+  private parseJsonField<T>(value: string, fallback: T): T {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  }
+
   async create(userId: string, createWorkflowDto: CreateWorkflowDto) {
     const { applicationId, ...data } = createWorkflowDto;
 
@@ -22,7 +43,7 @@ export class WorkflowService {
       throw new ForbiddenException('You do not have permission to access this application');
     }
 
-    return this.prisma.workflow.create({
+    const workflow = await this.prisma.workflow.create({
       data: {
         ...data,
         applicationId,
@@ -41,6 +62,8 @@ export class WorkflowService {
         updatedAt: true,
       },
     });
+
+    return this.serializeWorkflow(workflow);
   }
 
   async findByApp(userId: string, appId: string) {
@@ -87,11 +110,12 @@ export class WorkflowService {
       throw new ForbiddenException('You do not have permission to access this workflow');
     }
 
-    return workflow;
+    const { application, ...workflowData } = workflow;
+    return this.serializeWorkflow(workflowData);
   }
 
   async update(userId: string, id: string, updateWorkflowDto: UpdateWorkflowDto) {
-    const workflow = await this.prisma.workflow.findUnique({
+    const existingWorkflow = await this.prisma.workflow.findUnique({
       where: { id },
       include: {
         application: {
@@ -100,15 +124,15 @@ export class WorkflowService {
       },
     });
 
-    if (!workflow) {
+    if (!existingWorkflow) {
       throw new NotFoundException('Workflow not found');
     }
 
-    if (workflow.application.userId !== userId) {
+    if (existingWorkflow.application.userId !== userId) {
       throw new ForbiddenException('You do not have permission to update this workflow');
     }
 
-    return this.prisma.workflow.update({
+    const workflow = await this.prisma.workflow.update({
       where: { id },
       data: {
         ...updateWorkflowDto,
@@ -127,6 +151,8 @@ export class WorkflowService {
         updatedAt: true,
       },
     });
+
+    return this.serializeWorkflow(workflow);
   }
 
   async remove(userId: string, id: string) {

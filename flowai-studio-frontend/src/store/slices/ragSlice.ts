@@ -140,10 +140,14 @@ export const createRAGSlice: StateCreator<RAGSlice> = (set, get) => ({
         await get().fetchKnowledgeBaseById(knowledgeBaseId)
       }
 
-      set({ isLoading: false })
+      set({ isLoading: false, error: null })
       return document
-    } catch (error) {
-      set({ error: 'Failed to upload document', isLoading: false })
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        '文档上传失败'
+      set({ error: message, isLoading: false })
       throw error
     }
   },

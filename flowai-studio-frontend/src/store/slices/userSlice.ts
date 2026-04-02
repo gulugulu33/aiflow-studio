@@ -9,18 +9,24 @@ interface LoginError {
   details?: any;
 }
 
+export interface UserError {
+  type: LoginError['type']
+  message: string
+  details?: any
+}
+
 export interface UserSlice {
   user: User | null
   token: string | null
   isAuthenticated: boolean
   isLoading: boolean
-  error: LoginError | null
+  authError: UserError | null
   
   // Actions
   setUser: (user: User | null) => void
   setToken: (token: string | null) => void
   setIsAuthenticated: (value: boolean) => void
-  setError: (error: LoginError | null) => void
+  setAuthError: (error: UserError | null) => void
   clearError: () => void
   login: (data: LoginForm) => Promise<void>
   register: (data: RegisterForm) => Promise<void>
@@ -87,7 +93,7 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
   token: localStorage.getItem('token'),
   isAuthenticated: !!localStorage.getItem('token'),
   isLoading: false,
-  error: null,
+  authError: null,
 
   setUser: (user) => set({ user }),
   
@@ -102,12 +108,12 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
   
   setIsAuthenticated: (value) => set({ isAuthenticated: value }),
 
-  setError: (error) => set({ error }),
+  setAuthError: (authError) => set({ authError }),
 
-  clearError: () => set({ error: null }),
+  clearError: () => set({ authError: null }),
 
   login: async (data) => {
-    set({ isLoading: true, error: null })
+    set({ isLoading: true, authError: null })
     
     try {
       // 前端验证
@@ -131,14 +137,14 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
         token, 
         isAuthenticated: true, 
         isLoading: false, 
-        error: null 
+        authError: null 
       })
     } catch (error: any) {
       const loginError = parseLoginError(error)
       
       set({ 
         isLoading: false, 
-        error: loginError 
+        authError: loginError 
       })
       
       throw loginError
@@ -146,7 +152,7 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
   },
 
   register: async (data) => {
-    set({ isLoading: true, error: null })
+    set({ isLoading: true, authError: null })
     
     try {
       // 前端验证
@@ -167,13 +173,13 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
       }
 
       await request.post('/users/register', data)
-      set({ isLoading: false, error: null })
+      set({ isLoading: false, authError: null })
     } catch (error: any) {
       const loginError = parseLoginError(error)
       
       set({ 
         isLoading: false, 
-        error: loginError 
+        authError: loginError 
       })
       
       throw loginError
@@ -187,7 +193,7 @@ export const createUserSlice: StateCreator<UserSlice> = (set, get) => ({
       user: null, 
       token: null, 
       isAuthenticated: false, 
-      error: null 
+      authError: null 
     })
   },
 

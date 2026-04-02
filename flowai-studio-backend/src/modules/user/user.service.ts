@@ -142,7 +142,6 @@ export class UserService {
 
   async login(loginDto: LoginDto) {
     const { username, password } = loginDto;
-    console.log(`[Auth] Attempting to log in user: ${username}`);
 
     // 输入验证
     if (!username || !password) {
@@ -161,15 +160,11 @@ export class UserService {
       });
 
       if (!user) {
-        console.error(`[Auth] Login failed: User '${username}' not found.`);
         this.recordLoginAttempt(username, false);
         throw new UnauthorizedException('用户名或密码错误');
       }
-      console.log(`[Auth] Found user in DB. Hashed password: ${user.password}`);
-      console.log(`[Auth] Plaintext password from request: ${password}`);
 
       const isPasswordValid = await bcrypt.compare(password, user.password);
-      console.log(`[Auth] Password validation result for user '${username}': ${isPasswordValid}`);
 
       if (!isPasswordValid) {
         this.recordLoginAttempt(username, false);
@@ -183,7 +178,6 @@ export class UserService {
       }
 
       // 登录成功
-      console.log(`[Auth] Login successful for user: ${username}`);
       this.recordLoginAttempt(username, true);
 
       const payload = { 

@@ -37,7 +37,7 @@ export interface WorkflowSlice {
   setExecutionState: (nodeId: string, state: NodeExecution) => void
   setExecutionStatus: (status: string | null) => void
   setExecutionStates: (states: Record<string, NodeExecution>) => void
-  fetchWorkflows: (appId: string) => Promise<void>
+  fetchWorkflows: (appId: string) => Promise<Workflow[]>
   fetchWorkflowById: (id: string) => Promise<Workflow>
   createWorkflow: (appId: string, data: { name: string; description?: string }) => Promise<Workflow>
   updateWorkflow: (id: string, data: Partial<Workflow>) => Promise<Workflow>
@@ -191,6 +191,7 @@ export const createWorkflowSlice: StateCreator<WorkflowSlice> = (set, get) => ({
       const response = await request.get(`/workflows/app/${appId}`) as any
       const workflows = (Array.isArray(response.data) ? response.data : []) as Workflow[]
       set({ workflows, isLoading: false })
+      return workflows
     } catch (error) {
       set({ isLoading: false })
       set({ workflows: [] })

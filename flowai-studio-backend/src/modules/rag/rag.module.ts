@@ -8,6 +8,9 @@ import { memoryStorage } from 'multer';
   imports: [
     MulterModule.register({
       storage: memoryStorage(),
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
     }),
   ],
   controllers: [RAGController],

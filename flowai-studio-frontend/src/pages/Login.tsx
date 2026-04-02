@@ -9,16 +9,16 @@ const { Title, Text } = Typography
 
 const Login: React.FC = () => {
   const navigate = useNavigate()
-  const { login, isLoading, error, clearError } = useStore()
+  const { login, isLoading, authError, clearError } = useStore()
   const [form] = Form.useForm()
   const [showError, setShowError] = useState(false)
 
   // 监听错误变化
   useEffect(() => {
-    if (error) {
+    if (authError) {
       setShowError(true)
     }
-  }, [error])
+  }, [authError])
 
   // 清除错误
   const handleClearError = () => {
@@ -28,9 +28,9 @@ const Login: React.FC = () => {
 
   // 根据错误类型获取Alert类型
   const getAlertType = () => {
-    if (!error) return 'error'
+    if (!authError) return 'error'
     
-    switch (error.type) {
+    switch (authError.type) {
       case 'VALIDATION':
       case 'AUTHENTICATION':
         return 'error'
@@ -63,23 +63,23 @@ const Login: React.FC = () => {
       <Card className="auth-card" title={<Title level={3} className="auth-title">FlowAI Studio</Title>}>
         <Text className="auth-subtitle">AI应用低代码编排平台</Text>
         
-        {showError && error && (
+        {showError && authError && (
           <Alert
             message={
-              error.type === 'LOCKED' ? '账户锁定' : 
-              error.type === 'NETWORK' ? '网络错误' :
-              error.type === 'SERVER' ? '服务器错误' :
+              authError.type === 'LOCKED' ? '账户锁定' : 
+              authError.type === 'NETWORK' ? '网络错误' :
+              authError.type === 'SERVER' ? '服务器错误' :
               '登录失败'
             }
             description={
               <div>
-                <div>{error.message}</div>
-                {error.type === 'NETWORK' && (
+                <div>{authError.message}</div>
+                {authError.type === 'NETWORK' && (
                   <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
                     请检查网络连接或联系管理员
                   </div>
                 )}
-                {error.type === 'SERVER' && (
+                {authError.type === 'SERVER' && (
                   <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
                     服务器暂时不可用，请稍后重试
                   </div>

@@ -93,7 +93,7 @@ const KnowledgeBase: React.FC = () => {
       setDocuments(updatedKb.documents || [])
       onSuccess()
     } catch (error) {
-      message.error('上传失败，请重试')
+      message.error((error as any)?.response?.data?.message || '上传失败，请重试')
       onError(error)
     }
   }
