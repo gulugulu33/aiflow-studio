@@ -4,6 +4,7 @@ import { CreateKnowledgeBaseDto } from '../dto/create-knowledge-base.dto';
 import { UpdateKnowledgeBaseDto } from '../dto/update-knowledge-base.dto';
 import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
+import * as fs from 'fs';
 
 @Injectable()
 export class RAGService {
@@ -79,7 +80,26 @@ export class RAGService {
     // 验证知识库存在且属于用户
     await this.findKnowledgeBaseById(userId, knowledgeBaseId);
 
-    const content = file.buffer.toString('utf-8');
+    const mimeType = file.mimetype || 'application/octet-stream';
+    const isTextLike =
+      mimeType.startsWith('text/') ||
+      mimeType === 'application/json' ||
+      mimeType === 'application/xml' ||
+      mimeType === 'application/x-yaml';
+
+    if (!isTextLike) {
+      throw new BadRequestException('当前仅支持上传 txt / md / json 等文本类文件');
+    }
+
+    const contentBuffer =
+      file.buffer ||
+      (file.path ? fs.readFileSync(file.path) : undefined);
+
+    if (!contentBuffer) {
+      throw new BadRequestException('读取上传文件失败');
+    }
+
+    const content = contentBuffer.toString('utf-8');
     if (!content.trim()) {
       throw new BadRequestException('文档内容为空或当前格式暂不支持');
     }
@@ -90,8 +110,8 @@ export class RAGService {
       data: {
         name: file.originalname,
         content,
-        mimeType: file.mimetype || 'text/plain',
-        size: file.size,
+        mimeType,
+        size: file.size || contentBuffer.length,
         status: 'completed',
         knowledgeBaseId,
       },
@@ -180,7 +200,7 @@ export class RAGService {
 
   // 文档处理
   private async processDocumentContent(content: string): Promise<{ content: string; embedding: number[] }[]> {
-    const chunks = this.splitText(content, 1000, 200);
+    const chunks = this.splitText(content, 2000, 200).slice(0, 5);
 
     const chunksWithEmbeddings = await Promise.all(
       chunks.map(async (chunk) => {
@@ -208,6 +228,10 @@ export class RAGService {
 
   // 生成向量嵌入
   private async generateEmbedding(text: string): Promise<number[]> {
+    if (!this.qwenApiKey || this.qwenApiKey === 'your-qwen-api-key-here') {
+      return [];
+    }
+
     try {
       const response = await axios.post(
         `${this.qwenBaseUrl}/embeddings`,
