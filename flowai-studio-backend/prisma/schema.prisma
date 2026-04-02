@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 用户表
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联
+  applications    Application[]
+  knowledgeBases  KnowledgeBase[]
+  skills          Skill[]
+  chatHistories   ChatHistory[]
+
+  @@map("users")
+}
+
+// 应用表
+model Application {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  icon        String?
+  status      String   @default("draft") // draft, published, archived
+  shareLink   String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 外键
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 关联
+  workflows Workflow[]
+
+  @@map("applications")
+}
+
+// 工作流配置表
+model Workflow {
+  id          String @id @default(uuid())
+  name        String
+  description String?
+  
+  // 节点和边配置 (JSON存储)
+  nodes String
+  edges String
+  
+  // 变量定义
+  variables String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 外键
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  // 关联
+  executions WorkflowExecution[]
+
+  @@map("workflows")
+}
+
+// 工作流执行记录表
+model WorkflowExecution {
+  id     String @id @default(uuid())
+  status String @default("pending") // pending, running, success, failed, cancelled
+  
+  // 输入参数
+  inputs String?
+  
+  // 执行上下文 (节点输出结果)
+  context String?
+  
+  // 执行日志
+  logs String?
+  
+  // 错误信息
+  error String?
+  
+  // 执行耗时(ms)
+  duration Int?
+  
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  // 外键
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("workflow_executions")
+}
+
+// 知识库表
+model KnowledgeBase {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  
+  // 嵌入模型配置
+  embeddingModel String @default("text-embedding-v2")
+  
+  // 分块配置
+  chunkSize     Int     @default(500)
+  chunkOverlap  Int     @default(50)
+  
+  // 检索配置
+  topK              Int     @default(5)
+  similarityThreshold Float @default(0.7)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 外键
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 关联
+  documents Document[]
+
+  @@unique([name, userId])
+  @@map("knowledge_bases")
+}
+
+// 文档表
+model Document {
+  id              String  @id @default(uuid())
+  name            String
+  content         String
+  mimeType        String  @default("text/markdown")
+  size            Int
+  status          String  @default("completed")
+  error           String?
+  metadata        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  knowledgeBaseId String
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunks          DocumentChunk[]
+
+  @@unique([name, knowledgeBaseId])
+  @@map("documents")
+}
+
+// 文档分块表 (向量存储)
+model DocumentChunk {
+  id      String @id @default(uuid())
+  content String
+  
+  // 向量数据 (以JSON数组存储)
+  embedding String?
+  
+  // 分块位置
+  chunkIndex Int
+  startIndex Int
+  endIndex   Int
+  
+  // 元数据
+  metadata String?
+  
+  createdAt DateTime @default(now())
+
+  // 外键
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("document_chunks")
+}
+
+// Skill工具表
+model Skill {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  
+  // 工具类型: builtin(内置), custom(自定义)
+  type String @default("custom")
+  
+  // 内置工具类型标识
+  builtinType String?
+  
+  // 自定义工具配置
+  config String?
+  
+  // 输入参数定义
+  inputSchema String?
+  
+  // 输出格式定义
+  outputSchema String?
+  
+  // 是否启用
+  isActive Boolean @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 外键
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("skills")
+}
+
+// 对话历史表
+model ChatHistory {
+  id String @id @default(uuid())
+  
+  // 会话ID
+  sessionId String
+  
+  // 消息角色
+  role String // user, assistant, system
+  
+  // 消息内容
+  content String
+  
+  // 引用的知识库文档
+  references String?
+  
+  // 使用的工具
+  toolCalls String?
+  
+  // 元数据
+  metadata String?
+  
+  createdAt DateTime @default(now())
+
+  // 外键
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([userId])
+  @@map("chat_histories")
+}

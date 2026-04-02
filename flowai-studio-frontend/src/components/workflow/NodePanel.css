@@ -1,0 +1,79 @@
+.node-panel {
+  width: 200px;
+  height: 100%;
+  background: white;
+  border-right: 1px solid #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.node-panel-header {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.node-panel-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.node-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.node-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: white;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.node-item:hover {
+  background: #f0f7ff;
+  border-color: #1677ff;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.15);
+}
+
+.node-item:active {
+  cursor: grabbing;
+}
+
+.node-item-icon {
+  font-size: 16px;
+  margin-right: 12px;
+}
+
+.node-item-label {
+  font-size: 14px;
+  color: #333;
+}
+
+/* 滚动条样式 */
+.node-panel-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.node-panel-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.node-panel-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.node-panel-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

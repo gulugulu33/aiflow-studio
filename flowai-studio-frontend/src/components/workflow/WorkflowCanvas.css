@@ -1,0 +1,97 @@
+.workflow-canvas {
+  height: 100%;
+  width: 100%;
+  background: #fafafa;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 自定义节点样式 */
+.react-flow__node {
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+  transition: all 0.2s ease;
+}
+
+.react-flow__node:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.react-flow__node.selected {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2);
+}
+
+/* 节点状态样式 */
+.node-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.node-status.pending {
+  background: #faad14;
+}
+
+.node-status.running {
+  background: #1890ff;
+  animation: pulse 1.5s infinite;
+}
+
+.node-status.success {
+  background: #52c41a;
+}
+
+.node-status.failed {
+  background: #f5222d;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* 节点标题 */
+.node-title {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.node-content {
+  font-size: 12px;
+  color: #666;
+  padding: 4px 0;
+}
+
+/* 连接线样式 */
+.react-flow__edge-path {
+  stroke: #b1b1b7;
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #1677ff;
+}
+
+.react-flow__edge-label {
+  background: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px solid #d9d9d9;
+}

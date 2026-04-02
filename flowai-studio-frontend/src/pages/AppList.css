@@ -1,0 +1,45 @@
+.app-list {
+  height: 100%;
+}
+
+.app-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.app-list-header .ant-typography {
+  margin: 0;
+}
+
+.app-list-card {
+  height: calc(100% - 80px);
+  overflow: auto;
+}
+
+.app-icon {
+  color: #1677ff;
+  font-size: 20px;
+  margin-right: 8px;
+}
+
+.form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+@media (max-width: 768px) {
+  .app-list-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .app-list-header .ant-input {
+    width: 100%;
+  }
+}

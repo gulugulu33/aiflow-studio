@@ -1,0 +1,79 @@
+.config-panel {
+  width: 300px;
+  height: 100%;
+  background: white;
+  border-left: 1px solid #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.config-panel-header {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.config-panel-header h5 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.config-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.config-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #999;
+  font-size: 14px;
+}
+
+.config-panel-actions {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 表单样式 */
+.config-panel-content .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.config-panel-content .ant-form-item-label {
+  font-size: 13px;
+}
+
+.config-panel-content .ant-input,
+.config-panel-content .ant-select,
+.config-panel-content .ant-input-textarea {
+  border-radius: 4px;
+}
+
+/* 滚动条样式 */
+.config-panel-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.config-panel-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.config-panel-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.config-panel-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

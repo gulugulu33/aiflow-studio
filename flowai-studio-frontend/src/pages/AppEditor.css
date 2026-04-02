@@ -1,0 +1,56 @@
+.app-editor {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.app-editor-header .ant-typography {
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.app-editor-tabs {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.workflow-container {
+  height: calc(100vh - 280px);
+  min-height: 400px;
+  display: flex;
+  overflow: hidden;
+}
+
+.canvas-container {
+  flex: 1;
+  background: #fafafa;
+  position: relative;
+  overflow: hidden;
+}
+
+@media (max-width: 1200px) {
+  .workflow-container {
+    flex-direction: column;
+  }
+  
+  .node-panel,
+  .config-panel {
+    width: 100% !important;
+    height: 200px;
+  }
+  
+  .canvas-container {
+    flex: 1;
+  }
+}

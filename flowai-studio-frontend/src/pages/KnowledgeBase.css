@@ -1,0 +1,71 @@
+.knowledge-base {
+  height: 100%;
+  padding: 0 24px;
+  overflow-y: auto;
+}
+
+.knowledge-base-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.knowledge-base-header .ant-typography {
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.knowledge-base-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+}
+
+/* 文档上传区域 */
+.document-upload-section {
+  margin-bottom: 24px;
+}
+
+.document-upload-section .ant-upload-drag {
+  border: 2px dashed #d9d9d9;
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.document-upload-section .ant-upload-drag:hover {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2);
+}
+
+/* 文档列表区域 */
+.document-list-section {
+  margin-top: 24px;
+}
+
+.document-list-section h5 {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .knowledge-base {
+    padding: 0 16px;
+  }
+
+  .knowledge-base-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .knowledge-base-header .ant-typography {
+    font-size: 18px;
+  }
+}

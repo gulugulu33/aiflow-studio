@@ -1,0 +1,62 @@
+.skill-page {
+  height: 100%;
+  padding: 0 24px;
+  overflow-y: auto;
+}
+
+.skill-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.skill-header .ant-typography {
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.skill-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+}
+
+/* 执行工具模态框 */
+.execution-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.execution-params h5,
+.execution-result h5 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.execution-result pre {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .skill-page {
+    padding: 0 16px;
+  }
+
+  .skill-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .skill-header .ant-typography {
+    font-size: 18px;
+  }
+}
