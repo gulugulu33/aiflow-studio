@@ -81,13 +81,18 @@ export class RAGService {
     await this.findKnowledgeBaseById(userId, knowledgeBaseId);
 
     const mimeType = file.mimetype || 'application/octet-stream';
-    const isTextLike =
+    const fileName = file.originalname || '';
+    const lowerName = fileName.toLowerCase();
+    const ext = lowerName.includes('.') ? lowerName.slice(lowerName.lastIndexOf('.')) : '';
+    const isTextExt = ['.txt', '.md', '.markdown', '.json', '.csv', '.log', '.yaml', '.yml'].includes(ext);
+    const isTextLikeMime =
       mimeType.startsWith('text/') ||
       mimeType === 'application/json' ||
       mimeType === 'application/xml' ||
-      mimeType === 'application/x-yaml';
+      mimeType === 'application/x-yaml' ||
+      mimeType === 'application/octet-stream';
 
-    if (!isTextLike) {
+    if (!isTextLikeMime && !isTextExt) {
       throw new BadRequestException('当前仅支持上传 txt / md / json 等文本类文件');
     }
 
