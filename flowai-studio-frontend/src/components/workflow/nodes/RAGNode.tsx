@@ -5,7 +5,7 @@ import BaseNode from './BaseNode';
 
 const RAGNode = ({ id, data }: { id: string; data: any }) => {
   return (
-    <BaseNode id={id} label={data.label || '知识库检索'} icon={<ReadOutlined />} color="#1890ff" width={250}>
+    <BaseNode id={id} label={data.label || '知识库检索'} icon={<ReadOutlined />} color="#d97706" width={240}>
       <Handle type="source" position={Position.Right} />
       <Handle type="target" position={Position.Left} />
     </BaseNode>

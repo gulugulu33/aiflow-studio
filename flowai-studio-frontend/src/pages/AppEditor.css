@@ -1,56 +1,113 @@
-.app-editor {
-  height: 100%;
+/* ============================================================
+   AppEditor — Full-screen workflow editor
+   ============================================================ */
+
+/* Root: fill the whole content area */
+.editor-root {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  margin: -24px;              /* cancel Content padding from Layout */
+  background: var(--c-bg);
 }
 
-.app-editor-header {
+/* ---- Top bar ---- */
+.editor-topbar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-  gap: 16px;
+  height: 48px;
+  padding: 0 16px;
+  background: var(--c-bg-card);
+  border-bottom: 1px solid var(--c-border);
+  flex-shrink: 0;
+  z-index: 10;
 }
 
-.app-editor-header .ant-typography {
-  margin: 0;
+.editor-topbar-left {
   display: flex;
   align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
-.app-editor-tabs {
+.editor-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--c-text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+.editor-back-btn:hover {
+  background: var(--c-bg);
+  color: var(--c-text-primary);
+}
+
+.editor-topbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--c-border);
+}
+
+.editor-app-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.editor-app-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.editor-app-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editor-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-action-btn {
+  border-radius: 6px !important;
+  font-size: 13px !important;
+}
+
+/* ---- Editor body (3-column) ---- */
+.editor-body {
   flex: 1;
+  display: flex;
   overflow: hidden;
   min-height: 0;
 }
 
-.workflow-container {
-  height: calc(100vh - 280px);
-  min-height: 400px;
-  display: flex;
-  overflow: hidden;
-}
-
-.canvas-container {
+.editor-canvas-wrapper {
   flex: 1;
-  background: #fafafa;
   position: relative;
   overflow: hidden;
-}
-
-@media (max-width: 1200px) {
-  .workflow-container {
-    flex-direction: column;
-  }
-  
-  .node-panel,
-  .config-panel {
-    width: 100% !important;
-    height: 200px;
-  }
-  
-  .canvas-container {
-    flex: 1;
-  }
 }
