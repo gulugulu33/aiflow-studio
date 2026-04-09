@@ -5,7 +5,7 @@ import BaseNode from './BaseNode';
 
 const OutputNode = ({ id, data }: { id: string; data: any }) => {
   return (
-    <BaseNode id={id} label={data.label || '结束'} icon={<FlagOutlined />} color="#52c41a">
+    <BaseNode id={id} label={data.label || '结束'} icon={<FlagOutlined />} color="#059669">
       <Handle type="target" position={Position.Left} />
     </BaseNode>
   );
