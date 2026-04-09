@@ -1,45 +1,30 @@
 import { useMemo, useState } from 'react'
-import { Layout as AntLayout, Menu, Button, Avatar, Dropdown, Space, Typography, Tag } from 'antd'
+import { Layout as AntLayout, Menu, Button, Avatar, Dropdown, Typography } from 'antd'
 import { useLocation, useNavigate, Outlet } from 'react-router-dom'
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   UserOutlined,
   LogoutOutlined,
-  HomeOutlined,
+  AppstoreOutlined,
   BookOutlined,
   ToolOutlined,
-  CodeOutlined,
+  BugOutlined,
   RadarChartOutlined,
   ThunderboltOutlined,
+  CaretDownOutlined,
 } from '@ant-design/icons'
 import { useStore } from '../../store'
 import './Layout.css'
 
 const { Header, Sider, Content } = AntLayout
-const { Title, Text } = Typography
+const { Title } = Typography
 
-const routeMeta: Record<string, { title: string; description: string; badge: string }> = {
-  '/apps': {
-    title: '应用工作台',
-    description: '集中管理你的应用、版本状态与 AI 工作流入口。',
-    badge: 'Workspace',
-  },
-  '/knowledge-bases': {
-    title: '知识库中心',
-    description: '整理文档、维护索引，让检索链路保持可用且清晰。',
-    badge: 'Knowledge',
-  },
-  '/tools': {
-    title: '工具管理',
-    description: '统一维护内置与自定义工具，保持执行链路稳定。',
-    badge: 'Tools',
-  },
-  '/debug': {
-    title: '调试中心',
-    description: '验证聊天、执行工作流、排查接口与编排问题。',
-    badge: 'Debug',
-  },
+const routeMeta: Record<string, { title: string }> = {
+  '/apps': { title: '工作台' },
+  '/knowledge-bases': { title: '知识库' },
+  '/tools': { title: '工具管理' },
+  '/debug': { title: '调试中心' },
 }
 
 const Layout: React.FC = () => {
@@ -56,7 +41,7 @@ const Layout: React.FC = () => {
   const menuItems = [
     {
       key: '/apps',
-      icon: <HomeOutlined />,
+      icon: <AppstoreOutlined />,
       label: '工作台',
     },
     {
@@ -71,7 +56,7 @@ const Layout: React.FC = () => {
     },
     {
       key: '/debug',
-      icon: <CodeOutlined />,
+      icon: <BugOutlined />,
       label: '调试中心',
     },
   ]
@@ -80,11 +65,16 @@ const Layout: React.FC = () => {
     {
       key: 'profile',
       label: '个人资料',
+      icon: <UserOutlined />,
+    },
+    {
+      type: 'divider' as const,
     },
     {
       key: 'logout',
       label: '退出登录',
       icon: <LogoutOutlined />,
+      danger: true,
     },
   ]
 
@@ -104,8 +94,16 @@ const Layout: React.FC = () => {
 
   return (
     <AntLayout className="layout-container">
-      <Sider trigger={null} collapsible collapsed={collapsed} width={264} className="sidebar">
+      <Sider
+        trigger={null}
+        collapsible
+        collapsed={collapsed}
+        width={220}
+        collapsedWidth={64}
+        className="sidebar"
+      >
         <div className="sidebar-shell">
+          {/* Logo */}
           <div className="logo">
             <div className="logo-mark">
               <RadarChartOutlined />
@@ -113,15 +111,15 @@ const Layout: React.FC = () => {
             {!collapsed && (
               <div className="logo-copy">
                 <h1 className="logo-text">FlowAI Studio</h1>
-                <span>AI Workflow Console</span>
+                <span>AI Workflow Builder</span>
               </div>
             )}
           </div>
 
-          <div className="sidebar-section-label">导航</div>
+          {!collapsed && <div className="sidebar-section-label">Navigation</div>}
+
           <Menu
             mode="inline"
-            theme="dark"
             selectedKeys={[selectedKey]}
             items={menuItems}
             onClick={handleMenuClick}
@@ -134,8 +132,8 @@ const Layout: React.FC = () => {
                 <ThunderboltOutlined />
               </div>
               <div>
-                <strong>保持工作流可读</strong>
-                <p>先整理骨架，再优化节点和交互，页面体验会稳定很多。</p>
+                <strong>FlowAI Studio</strong>
+                <p>用 AI 工作流自动化你的业务流程。</p>
               </div>
             </div>
           )}
@@ -143,6 +141,7 @@ const Layout: React.FC = () => {
       </Sider>
 
       <AntLayout className="layout-main">
+        {/* Top bar */}
         <Header className="header">
           <div className="header-left">
             <Button
@@ -152,24 +151,31 @@ const Layout: React.FC = () => {
               className="trigger"
             />
             <div className="header-copy">
-              <div className="header-badge">{pageMeta.badge}</div>
-              <Title level={4}>{pageMeta.title}</Title>
-              <Text>{pageMeta.description}</Text>
+              <Title level={3}>{pageMeta.title}</Title>
             </div>
           </div>
 
           <div className="header-right">
-            <Tag bordered={false} className="header-status-tag">
-              在线工作区
-            </Tag>
-            <Dropdown menu={{ items: userMenu, onClick: handleUserMenuClick }} trigger={['click']}>
-              <Space className="profile-chip">
-                <Avatar icon={<UserOutlined />} />
+            <div className="header-online-dot">
+              <span className="online-dot" />
+              <span className="online-text">在线</span>
+            </div>
+            <Dropdown
+              menu={{ items: userMenu, onClick: handleUserMenuClick }}
+              trigger={['click']}
+              placement="bottomRight"
+            >
+              <div className="profile-chip">
+                <Avatar
+                  size={26}
+                  icon={<UserOutlined />}
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)', flexShrink: 0 }}
+                />
                 <div className="profile-copy">
                   <span className="username">{user?.username || '用户'}</span>
-                  <small>Workspace Owner</small>
                 </div>
-              </Space>
+                <CaretDownOutlined className="profile-caret" />
+              </div>
             </Dropdown>
           </div>
         </Header>

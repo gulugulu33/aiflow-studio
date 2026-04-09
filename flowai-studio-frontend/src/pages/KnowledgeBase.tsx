@@ -1,38 +1,51 @@
-import { useState, useEffect } from 'react'
-import { Card, Button, Input, Table, Tag, message, Modal, Upload, Space, Typography, Spin, Empty } from 'antd'
-import { PlusOutlined, UploadOutlined, DeleteOutlined, EditOutlined, FileTextOutlined, BookOutlined, FolderOutlined } from '@ant-design/icons'
+import { useEffect, useMemo, useState } from 'react'
+import { Button, Input, Table, message, Modal, Upload, Space, Typography, Empty, Tag } from 'antd'
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  BookOutlined,
+  FolderOpenOutlined,
+  FileTextOutlined,
+  InboxOutlined,
+  DatabaseOutlined,
+} from '@ant-design/icons'
 import { useStore } from '../store'
 import './KnowledgeBase.css'
 
-const { Title, Text } = Typography
+const { Text, Paragraph } = Typography
 const { TextArea } = Input
 const { Dragger } = Upload
 
 const KnowledgeBase: React.FC = () => {
-  const { 
-    knowledgeBases, 
-    isLoading, 
-    fetchKnowledgeBases, 
+  const {
+    knowledgeBases,
+    isLoading,
+    fetchKnowledgeBases,
     fetchKnowledgeBaseById,
-    createKnowledgeBase, 
-    updateKnowledgeBase, 
-    deleteKnowledgeBase, 
-    uploadDocument, 
-    deleteDocument 
+    createKnowledgeBase,
+    updateKnowledgeBase,
+    deleteKnowledgeBase,
+    uploadDocument,
+    deleteDocument,
   } = useStore()
   const [modalVisible, setModalVisible] = useState(false)
   const [documentModalVisible, setDocumentModalVisible] = useState(false)
   const [editingKb, setEditingKb] = useState<any>(null)
   const [selectedKb, setSelectedKb] = useState<any>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-  })
+  const [formData, setFormData] = useState({ name: '', description: '' })
   const [documents, setDocuments] = useState<any[]>([])
 
   useEffect(() => {
     fetchKnowledgeBases()
   }, [])
+
+  const safeKnowledgeBases = Array.isArray(knowledgeBases) ? knowledgeBases : []
+
+  const totalDocuments = useMemo(
+    () => safeKnowledgeBases.reduce((count, kb) => count + (kb.documents?.length || 0), 0),
+    [safeKnowledgeBases],
+  )
 
   const handleAddKb = () => {
     setEditingKb(null)
@@ -51,7 +64,6 @@ const KnowledgeBase: React.FC = () => {
       message.error('请输入知识库名称')
       return
     }
-
     try {
       if (editingKb) {
         await updateKnowledgeBase(editingKb.id, formData)
@@ -61,7 +73,7 @@ const KnowledgeBase: React.FC = () => {
         message.success('知识库创建成功')
       }
       setModalVisible(false)
-    } catch (error) {
+    } catch {
       message.error('操作失败，请重试')
     }
   }
@@ -70,7 +82,7 @@ const KnowledgeBase: React.FC = () => {
     try {
       await deleteKnowledgeBase(id)
       message.success('知识库删除成功')
-    } catch (error) {
+    } catch {
       message.error('删除失败，请重试')
     }
   }
@@ -81,14 +93,11 @@ const KnowledgeBase: React.FC = () => {
     setDocumentModalVisible(true)
   }
 
-  const safeKnowledgeBases = Array.isArray(knowledgeBases) ? knowledgeBases : []
-
   const handleUploadDocument = async (options: any) => {
     const { file, onSuccess, onError } = options
     try {
       await uploadDocument(selectedKb.id, file)
       message.success('文档上传成功')
-      // 刷新当前知识库的文档列表
       const updatedKb = await fetchKnowledgeBaseById(selectedKb.id)
       setDocuments(updatedKb.documents || [])
       onSuccess()
@@ -102,10 +111,9 @@ const KnowledgeBase: React.FC = () => {
     try {
       await deleteDocument(documentId)
       message.success('文档删除成功')
-      // 刷新当前知识库的文档列表
       const updatedKb = await fetchKnowledgeBaseById(selectedKb.id)
       setDocuments(updatedKb.documents || [])
-    } catch (error) {
+    } catch {
       message.error('删除失败，请重试')
     }
   }
@@ -115,164 +123,237 @@ const KnowledgeBase: React.FC = () => {
       title: '知识库名称',
       dataIndex: 'name',
       key: 'name',
-      render: (text: string) => (
-        <Space>
-          <BookOutlined className="kb-icon" />
-          <Text strong>{text}</Text>
-        </Space>
+      render: (text: string, record: any) => (
+        <div className="kb-table-name">
+          <div className="kb-table-icon">
+            <BookOutlined />
+          </div>
+          <div>
+            <Text strong style={{ color: 'var(--c-text-primary)' }}>{text}</Text>
+            <div className="kb-table-desc">
+              {record.description || '暂无描述'}
+            </div>
+          </div>
+        </div>
       ),
     },
     {
-      title: '描述',
-      dataIndex: 'description',
-      key: 'description',
-      ellipsis: true,
-      render: (text: string) => text || <Text type="secondary">无描述</Text>,
-    },
-    {
-      title: '文档数',
+      title: '文档数量',
       key: 'documentCount',
-      render: (_: any, record: any) => (record.documents || []).length,
+      render: (_: any, record: any) => (
+        <span className="kb-doc-count">
+          {(record.documents || []).length} 份
+        </span>
+      ),
     },
     {
       title: '创建时间',
       dataIndex: 'createdAt',
       key: 'createdAt',
-      render: (time: string) => new Date(time).toLocaleString(),
+      render: (time: string) => (
+        <Text style={{ color: 'var(--c-text-secondary)', fontSize: 13 }}>
+          {new Date(time).toLocaleDateString('zh-CN')}
+        </Text>
+      ),
     },
     {
       title: '操作',
       key: 'action',
       render: (_: any, record: any) => (
-        <Space size="middle">
-          <Button type="link" icon={<FolderOutlined />} onClick={() => handleViewDocuments(record)}>
+        <Space size="small" wrap>
+          <Button
+            icon={<FolderOpenOutlined />}
+            size="small"
+            className="action-btn action-btn--docs"
+            onClick={() => handleViewDocuments(record)}
+          >
             管理文档
           </Button>
-          <Button type="link" icon={<EditOutlined />} onClick={() => handleEditKb(record)}>
-            编辑
-          </Button>
-          <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDeleteKb(record.id)}>
-            删除
-          </Button>
+          <Button
+            icon={<EditOutlined />}
+            size="small"
+            type="text"
+            className="action-btn"
+            onClick={() => handleEditKb(record)}
+          />
+          <Button
+            danger
+            icon={<DeleteOutlined />}
+            size="small"
+            type="text"
+            className="action-btn action-btn--danger"
+            onClick={() => handleDeleteKb(record.id)}
+          />
         </Space>
       ),
     },
   ]
 
   return (
-    <div className="kb-list">
-      <div className="kb-header">
-        <Title level={4}>知识库管理</Title>
+    <div className="kb-page">
+      {/* Page header */}
+      <div className="kb-page-header">
+        <div>
+          <h2 className="kb-page-title">知识库</h2>
+          <p className="kb-page-desc">管理文档资产，为 RAG 节点提供稳定可靠的检索素材。</p>
+        </div>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAddKb}>
           新建知识库
         </Button>
       </div>
 
-      <Card className="kb-card">
+      {/* Stats */}
+      <div className="kb-stats-row">
+        <div className="kb-stat-card">
+          <span className="kb-stat-label">知识库总数</span>
+          <span className="kb-stat-value">{safeKnowledgeBases.length}</span>
+        </div>
+        <div className="kb-stat-card">
+          <span className="kb-stat-label">文档总量</span>
+          <span className="kb-stat-value kb-stat-value--blue">{totalDocuments}</span>
+        </div>
+      </div>
+
+      {/* Table card */}
+      <div className="kb-table-card">
         {safeKnowledgeBases.length > 0 ? (
-          <Table 
-            columns={kbColumns} 
-            dataSource={safeKnowledgeBases} 
-            rowKey="id" 
-            loading={isLoading} 
+          <Table
+            columns={kbColumns}
+            dataSource={safeKnowledgeBases}
+            rowKey="id"
+            loading={isLoading}
+            pagination={{ pageSize: 8, size: 'small' }}
           />
         ) : (
-          <Empty description="暂无知识库" />
+          <Empty
+            description="还没有知识库，创建一个来上传文档吧"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            style={{ padding: '48px 0' }}
+          />
         )}
-      </Card>
+      </div>
 
-      {/* 知识库编辑模态框 */}
+      {/* Create / Edit Modal */}
       <Modal
         title={editingKb ? '编辑知识库' : '新建知识库'}
         open={modalVisible}
         onOk={handleSaveKb}
         onCancel={() => setModalVisible(false)}
         confirmLoading={isLoading}
+        okText={editingKb ? '保存修改' : '创建知识库'}
+        cancelText="取消"
+        width={480}
+        okButtonProps={{ style: { background: 'var(--c-accent)', borderColor: 'var(--c-accent)' } }}
       >
-        <Input
-          placeholder="知识库名称"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          className="mb-4"
-        />
-        <TextArea
-          placeholder="知识库描述"
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          rows={4}
-        />
+        <div className="kb-modal-fields">
+          <div className="kb-field">
+            <label className="kb-field-label">知识库名称</label>
+            <Input
+              placeholder="给知识库起个名字"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            />
+          </div>
+          <div className="kb-field">
+            <label className="kb-field-label">描述（可选）</label>
+            <TextArea
+              placeholder="这个知识库的用途，例如：产品手册、FAQ、SOP"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={3}
+            />
+          </div>
+        </div>
       </Modal>
 
-      {/* 文档管理模态框 */}
+      {/* Document Management Modal */}
       <Modal
-        title={`${selectedKb?.name} - 文档管理`}
+        title={
+          <div className="doc-modal-title">
+            <DatabaseOutlined />
+            <span>{selectedKb?.name} · 文档管理</span>
+          </div>
+        }
         open={documentModalVisible}
         onCancel={() => setDocumentModalVisible(false)}
-        width={800}
+        width={880}
         footer={null}
       >
-        <div className="document-upload-section">
+        <div className="doc-modal-body">
+          {/* Upload */}
           <Dragger
             name="file"
             multiple={false}
             customRequest={handleUploadDocument}
             showUploadList={false}
+            className="doc-dragger"
           >
-            <p className="ant-upload-drag-icon">
-              <UploadOutlined />
+            <p className="ant-upload-drag-icon" style={{ marginBottom: 10 }}>
+              <InboxOutlined style={{ fontSize: 28, color: 'var(--c-accent)' }} />
             </p>
-            <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
-            <p className="ant-upload-hint">
-              支持 txt、pdf、md 等文本格式文件
-            </p>
+            <p className="doc-dragger-text">拖拽文件到此处，或点击上传</p>
+            <p className="doc-dragger-hint">支持 txt、pdf、md 等格式，上传后即可用于 RAG 检索</p>
           </Dragger>
-        </div>
 
-        <div className="document-list-section mt-4">
-          <h5 className="mb-2">已上传文档</h5>
-          {documents.length === 0 ? (
-            <Text type="secondary">暂无文档</Text>
-          ) : (
-            <Table
-              columns={[
-                {
-                  title: '文件名',
-                  dataIndex: 'name',
-                  key: 'name',
-                },
-                {
-                  title: '大小',
-                  dataIndex: 'size',
-                  key: 'size',
-                  render: (size: number) => `${(size / 1024).toFixed(2)} KB`,
-                },
-                {
-                  title: '上传时间',
-                  dataIndex: 'createdAt',
-                  key: 'createdAt',
-                  render: (time: string) => new Date(time).toLocaleString(),
-                },
-                {
-                  title: '操作',
-                  key: 'action',
-                  render: (_: any, record: any) => (
-                    <Button 
-                      icon={<DeleteOutlined />} 
-                      size="small" 
-                      danger 
-                      onClick={() => handleDeleteDocument(record.id)}
-                      loading={isLoading}
-                    >
-                      删除
-                    </Button>
-                  ),
-                },
-              ]}
-              dataSource={documents}
-              rowKey="id"
-              pagination={false}
-            />
-          )}
+          {/* Document list */}
+          <div className="doc-list-section">
+            <div className="doc-list-header">
+              <Text strong>已上传文档</Text>
+              <Text style={{ color: 'var(--c-text-secondary)', fontSize: 13 }}>
+                {documents.length ? `共 ${documents.length} 份` : '暂无文档'}
+              </Text>
+            </div>
+
+            {documents.length === 0 ? (
+              <Empty description="上传第一份文档后将在这里显示" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            ) : (
+              <Table
+                columns={[
+                  {
+                    title: '文件名',
+                    dataIndex: 'name',
+                    key: 'name',
+                    render: (name: string) => (
+                      <Space>
+                        <FileTextOutlined style={{ color: 'var(--c-accent)' }} />
+                        <Text>{name}</Text>
+                      </Space>
+                    ),
+                  },
+                  {
+                    title: '大小',
+                    dataIndex: 'size',
+                    key: 'size',
+                    render: (size: number) => `${(size / 1024).toFixed(1)} KB`,
+                  },
+                  {
+                    title: '上传时间',
+                    dataIndex: 'createdAt',
+                    key: 'createdAt',
+                    render: (time: string) => new Date(time).toLocaleString('zh-CN'),
+                  },
+                  {
+                    title: '操作',
+                    key: 'action',
+                    render: (_: any, record: any) => (
+                      <Button
+                        icon={<DeleteOutlined />}
+                        size="small"
+                        danger
+                        type="text"
+                        onClick={() => handleDeleteDocument(record.id)}
+                        loading={isLoading}
+                      />
+                    ),
+                  },
+                ]}
+                dataSource={documents}
+                rowKey="id"
+                pagination={false}
+                size="small"
+              />
+            )}
+          </div>
         </div>
       </Modal>
     </div>
