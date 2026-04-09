@@ -1,13 +1,13 @@
 /* ============================================================
-   AppList page
+   AppList page — Card grid layout
    ============================================================ */
 .app-list-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
-/* Toolbar */
+/* ---- Toolbar ---- */
 .app-toolbar {
   display: flex;
   align-items: center;
@@ -54,53 +54,194 @@
   width: 240px;
 }
 
-/* Table card */
-.app-table-card {
+/* ---- Loading state ---- */
+.app-grid-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+
+/* ---- Card grid ---- */
+.app-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(264px, 1fr));
+  gap: 16px;
+}
+
+/* ---- Base card ---- */
+.app-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   background: var(--c-bg-card);
   border: 1px solid var(--c-border);
-  border-radius: 12px;
-  box-shadow: var(--c-shadow-sm);
-  overflow: hidden;
+  border-radius: var(--c-radius-md);
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 172px;
 }
 
-/* Table row */
-.app-table-name {
-  display: flex;
-  gap: 10px;
+.app-card:hover {
+  border-color: rgba(124, 58, 237, 0.3);
+  box-shadow: var(--c-shadow-md);
+  transform: translateY(-1px);
+}
+
+/* ---- New app card (dashed) ---- */
+.app-card--new {
+  border-style: dashed;
+  border-color: var(--c-border);
+  background: var(--c-bg);
   align-items: center;
-  padding: 4px 0;
+  justify-content: center;
+  gap: 10px;
+  color: var(--c-text-tertiary);
+  font-family: inherit;
+  font-size: 14px;
 }
 
-.app-table-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+.app-card--new:hover {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  background: var(--c-accent-light);
+}
+
+.app-card-new-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
+  background: var(--c-bg-card);
+  border: 1.5px dashed var(--c-border);
+  font-size: 18px;
+  transition: all 0.2s ease;
+}
+
+.app-card--new:hover .app-card-new-icon {
+  border-color: var(--c-accent);
   background: var(--c-accent-light);
   color: var(--c-accent);
-  font-size: 15px;
+}
+
+.app-card-new-label {
+  font-weight: 500;
+}
+
+/* ---- Card header (icon + menu) ---- */
+.app-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.app-card-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--c-accent-light) 0%, #ede9fe 100%);
+  color: var(--c-accent);
+  font-size: 18px;
   flex-shrink: 0;
 }
 
-.app-table-title {
-  font-size: 14px;
+.app-card-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.app-card-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--c-text-tertiary);
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.15s ease;
+  opacity: 0;
+}
+
+.app-card:hover .app-card-menu-btn {
+  opacity: 1;
+}
+
+.app-card-menu-btn:hover {
+  background: var(--c-bg);
+  color: var(--c-text-primary);
+}
+
+/* ---- Card body ---- */
+.app-card-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.app-card-name {
+  margin: 0 0 6px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--c-text-primary);
   line-height: 1.3;
-}
-
-.app-table-desc {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--c-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 280px;
 }
 
-/* Status badges */
+.app-card-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--c-text-tertiary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---- Card footer ---- */
+.app-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--c-border-light);
+}
+
+.app-card-time {
+  font-size: 12px;
+  color: var(--c-text-tertiary);
+}
+
+.app-card-enter {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-accent);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.app-card:hover .app-card-enter {
+  opacity: 1;
+}
+
+/* ---- Status badges ---- */
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -109,6 +250,7 @@
   font-size: 12px;
   font-weight: 600;
   line-height: 1.6;
+  flex-shrink: 0;
 }
 
 .status-badge--published {
@@ -126,38 +268,14 @@
   background: var(--c-bg);
 }
 
-/* Row actions */
-.app-row-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+/* ---- Empty state ---- */
+.app-empty-wrapper {
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--c-radius-md);
 }
 
-.action-btn-enter {
-  font-size: 12px;
-  border-color: var(--c-border) !important;
-  color: var(--c-text-secondary) !important;
-  border-radius: 6px !important;
-  transition: all 0.15s !important;
-}
-
-.action-btn-enter:hover {
-  color: var(--c-accent) !important;
-  border-color: rgba(124, 58, 237, 0.35) !important;
-  background: var(--c-accent-light) !important;
-}
-
-.action-btn-more {
-  color: var(--c-text-tertiary) !important;
-  border-radius: 6px !important;
-}
-
-.action-btn-more:hover {
-  background: var(--c-bg) !important;
-  color: var(--c-text-primary) !important;
-}
-
-/* Modal footer */
+/* ---- Modal footer ---- */
 .modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -167,7 +285,7 @@
   border-top: 1px solid var(--c-border);
 }
 
-/* Responsive */
+/* ---- Responsive ---- */
 @media (max-width: 768px) {
   .app-toolbar {
     flex-direction: column;
@@ -181,5 +299,17 @@
   .app-search {
     flex: 1;
     width: auto;
+  }
+
+  .app-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+
+  .app-card-menu-btn {
+    opacity: 1;
+  }
+
+  .app-card-enter {
+    opacity: 1;
   }
 }

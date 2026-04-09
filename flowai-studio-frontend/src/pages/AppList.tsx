@@ -1,21 +1,20 @@
 import { useState, useEffect } from 'react'
-import { Button, Table, Typography, Space, Modal, Form, Input, message, Tooltip, Popconfirm, Empty, Tag, Dropdown } from 'antd'
+import { Button, Modal, Form, Input, message, Empty, Dropdown, Spin } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  RightOutlined,
   AppstoreOutlined,
   SearchOutlined,
   RocketOutlined,
   MoreOutlined,
+  ArrowRightOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
 import { Application } from '../types'
 import './AppList.css'
 
-const { Text } = Typography
 const { Search } = Input
 
 const AppList: React.FC = () => {
@@ -82,34 +81,34 @@ const AppList: React.FC = () => {
     navigate(`/apps/${appId}/editor`)
   }
 
-  const getRowMenu = (record: Application) => ({
+  const getCardMenu = (app: Application) => ({
     items: [
       {
         key: 'edit',
         label: '编辑',
         icon: <EditOutlined />,
-        onClick: () => handleEdit(record),
+        onClick: () => handleEdit(app),
       },
-      record.status === 'draft'
+      app.status === 'draft'
         ? {
             key: 'publish',
             label: '发布',
             onClick: async () => {
               try {
-                await publishApp(record.id)
+                await publishApp(app.id)
                 message.success('应用发布成功')
               } catch {
                 message.error('发布失败')
               }
             },
           }
-        : record.status === 'published'
+        : app.status === 'published'
         ? {
             key: 'unpublish',
             label: '下线',
             onClick: async () => {
               try {
-                await unpublishApp(record.id)
+                await unpublishApp(app.id)
                 message.success('应用已下线')
               } catch {
                 message.error('下线失败')
@@ -123,75 +122,16 @@ const AppList: React.FC = () => {
         label: '删除',
         icon: <DeleteOutlined />,
         danger: true,
-        onClick: () => handleDelete(record.id),
+        onClick: () => handleDelete(app.id),
       },
     ].filter(Boolean),
   })
 
-  const columns = [
-    {
-      title: '应用名称',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text: string, record: Application) => (
-        <div className="app-table-name">
-          <div className="app-table-icon">
-            <AppstoreOutlined />
-          </div>
-          <div>
-            <div className="app-table-title">{text}</div>
-            <div className="app-table-desc">{record.description || '暂无描述'}</div>
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 90,
-      render: (status: string) => {
-        const map: Record<string, { label: string; cls: string }> = {
-          draft: { label: '草稿', cls: 'status-badge--draft' },
-          published: { label: '已发布', cls: 'status-badge--published' },
-          archived: { label: '已归档', cls: 'status-badge--archived' },
-        }
-        const s = map[status]
-        return s ? <span className={`status-badge ${s.cls}`}>{s.label}</span> : <Tag>{status}</Tag>
-      },
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 110,
-      render: (time: string) => (
-        <Text style={{ color: 'var(--c-text-tertiary)', fontSize: 12 }}>
-          {new Date(time).toLocaleDateString('zh-CN')}
-        </Text>
-      ),
-    },
-    {
-      title: '',
-      key: 'action',
-      width: 140,
-      render: (_: any, record: Application) => (
-        <div className="app-row-actions">
-          <Button
-            size="small"
-            icon={<RightOutlined />}
-            className="action-btn-enter"
-            onClick={() => handleEnterEditor(record.id)}
-          >
-            进入编辑器
-          </Button>
-          <Dropdown menu={getRowMenu(record)} trigger={['click']} placement="bottomRight">
-            <Button size="small" type="text" icon={<MoreOutlined />} className="action-btn-more" />
-          </Dropdown>
-        </div>
-      ),
-    },
-  ]
+  const statusMap: Record<string, { label: string; cls: string }> = {
+    draft: { label: '草稿', cls: 'status-badge--draft' },
+    published: { label: '已发布', cls: 'status-badge--published' },
+    archived: { label: '已归档', cls: 'status-badge--archived' },
+  }
 
   return (
     <div className="app-list-page">
@@ -216,23 +156,86 @@ const AppList: React.FC = () => {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="app-table-card">
-        {filteredApps.length > 0 ? (
-          <Table
-            columns={columns}
-            dataSource={filteredApps}
-            rowKey="id"
-            loading={isLoading}
-            pagination={{ pageSize: 10, size: 'small', showSizeChanger: false }}
-          />
-        ) : (
+      {/* Card grid */}
+      {isLoading ? (
+        <div className="app-grid-loading">
+          <Spin size="large" />
+        </div>
+      ) : filteredApps.length > 0 ? (
+        <div className="app-card-grid">
+          {/* New app card */}
+          <button className="app-card app-card--new" onClick={handleCreate}>
+            <div className="app-card-new-icon">
+              <PlusOutlined />
+            </div>
+            <span className="app-card-new-label">创建新应用</span>
+          </button>
+
+          {filteredApps.map((app) => {
+            const status = statusMap[app.status]
+            return (
+              <div
+                key={app.id}
+                className="app-card"
+                onClick={() => handleEnterEditor(app.id)}
+              >
+                {/* Card header */}
+                <div className="app-card-header">
+                  <div className="app-card-icon">
+                    {app.icon ? (
+                      <img src={app.icon} alt="" className="app-card-icon-img" />
+                    ) : (
+                      <AppstoreOutlined />
+                    )}
+                  </div>
+                  <Dropdown
+                    menu={getCardMenu(app)}
+                    trigger={['click']}
+                    placement="bottomRight"
+                  >
+                    <button
+                      className="app-card-menu-btn"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <MoreOutlined />
+                    </button>
+                  </Dropdown>
+                </div>
+
+                {/* Card body */}
+                <div className="app-card-body">
+                  <h3 className="app-card-name">{app.name}</h3>
+                  <p className="app-card-desc">
+                    {app.description || '暂无描述'}
+                  </p>
+                </div>
+
+                {/* Card footer */}
+                <div className="app-card-footer">
+                  {status && (
+                    <span className={`status-badge ${status.cls}`}>
+                      {status.label}
+                    </span>
+                  )}
+                  <span className="app-card-time">
+                    {new Date(app.createdAt).toLocaleDateString('zh-CN')}
+                  </span>
+                  <span className="app-card-enter">
+                    编辑 <ArrowRightOutlined />
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="app-empty-wrapper">
           <Empty
             description="暂无应用，点击「新建应用」开始搭建"
             style={{ padding: '56px 0' }}
           />
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Modal */}
       <Modal
