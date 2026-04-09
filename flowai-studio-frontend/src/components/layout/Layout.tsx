@@ -1,11 +1,31 @@
-import { useState } from 'react'
-import { Layout as AntLayout, Menu, Button, Avatar, Dropdown, Space } from 'antd'
+import { useMemo, useState } from 'react'
+import { Layout as AntLayout, Menu, Button, Avatar, Dropdown, Typography } from 'antd'
 import { useLocation, useNavigate, Outlet } from 'react-router-dom'
-import { MenuFoldOutlined, MenuUnfoldOutlined, UserOutlined, LogoutOutlined, HomeOutlined, AppstoreOutlined, BookOutlined, ToolOutlined, CodeOutlined } from '@ant-design/icons'
+import {
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  AppstoreOutlined,
+  BookOutlined,
+  ToolOutlined,
+  BugOutlined,
+  RadarChartOutlined,
+  ThunderboltOutlined,
+  CaretDownOutlined,
+} from '@ant-design/icons'
 import { useStore } from '../../store'
 import './Layout.css'
 
 const { Header, Sider, Content } = AntLayout
+const { Title } = Typography
+
+const routeMeta: Record<string, { title: string }> = {
+  '/apps': { title: '工作台' },
+  '/knowledge-bases': { title: '知识库' },
+  '/tools': { title: '工具管理' },
+  '/debug': { title: '调试中心' },
+}
 
 const Layout: React.FC = () => {
   const navigate = useNavigate()
@@ -21,7 +41,7 @@ const Layout: React.FC = () => {
   const menuItems = [
     {
       key: '/apps',
-      icon: <HomeOutlined />,
+      icon: <AppstoreOutlined />,
       label: '工作台',
     },
     {
@@ -36,7 +56,7 @@ const Layout: React.FC = () => {
     },
     {
       key: '/debug',
-      icon: <CodeOutlined />,
+      icon: <BugOutlined />,
       label: '调试中心',
     },
   ]
@@ -45,11 +65,16 @@ const Layout: React.FC = () => {
     {
       key: 'profile',
       label: '个人资料',
+      icon: <UserOutlined />,
+    },
+    {
+      type: 'divider' as const,
     },
     {
       key: 'logout',
       label: '退出登录',
       icon: <LogoutOutlined />,
+      danger: true,
     },
   ]
 
@@ -64,44 +89,97 @@ const Layout: React.FC = () => {
     navigate(key)
   }
 
-  // 计算当前选中的菜单项，处理子路由情况
   const selectedKey = '/' + (location.pathname.split('/')[1] || 'apps')
+  const pageMeta = useMemo(() => routeMeta[selectedKey] || routeMeta['/apps'], [selectedKey])
 
   return (
     <AntLayout className="layout-container">
-      <Sider trigger={null} collapsible collapsed={collapsed} width={240} className="sidebar">
-        <div className="logo">
-          <h1 className="logo-text">FlowAI Studio</h1>
-        </div>
-        <Menu
-          mode="inline"
-          theme="dark"
-          selectedKeys={[selectedKey]}
-          items={menuItems}
-          onClick={handleMenuClick}
-          className="menu"
-        />
-      </Sider>
-      <AntLayout>
-        <Header className="header">
-          <Button
-            type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={handleToggle}
-            className="trigger"
+      <Sider
+        trigger={null}
+        collapsible
+        collapsed={collapsed}
+        width={220}
+        collapsedWidth={64}
+        className="sidebar"
+      >
+        <div className="sidebar-shell">
+          {/* Logo */}
+          <div className="logo">
+            <div className="logo-mark">
+              <RadarChartOutlined />
+            </div>
+            {!collapsed && (
+              <div className="logo-copy">
+                <h1 className="logo-text">FlowAI Studio</h1>
+                <span>AI Workflow Builder</span>
+              </div>
+            )}
+          </div>
+
+          {!collapsed && <div className="sidebar-section-label">Navigation</div>}
+
+          <Menu
+            mode="inline"
+            selectedKeys={[selectedKey]}
+            items={menuItems}
+            onClick={handleMenuClick}
+            className="menu"
           />
+
+          {!collapsed && (
+            <div className="sidebar-footer-card">
+              <div className="sidebar-footer-icon">
+                <ThunderboltOutlined />
+              </div>
+              <div>
+                <strong>FlowAI Studio</strong>
+                <p>用 AI 工作流自动化你的业务流程。</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </Sider>
+
+      <AntLayout className="layout-main">
+        {/* Top bar */}
+        <Header className="header">
+          <div className="header-left">
+            <Button
+              type="text"
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={handleToggle}
+              className="trigger"
+            />
+            <div className="header-copy">
+              <Title level={3}>{pageMeta.title}</Title>
+            </div>
+          </div>
+
           <div className="header-right">
+            <div className="header-online-dot">
+              <span className="online-dot" />
+              <span className="online-text">在线</span>
+            </div>
             <Dropdown
               menu={{ items: userMenu, onClick: handleUserMenuClick }}
               trigger={['click']}
+              placement="bottomRight"
             >
-              <Space>
-                <Avatar icon={<UserOutlined />} />
-                <span className="username">{user?.username || '用户'}</span>
-              </Space>
+              <div className="profile-chip">
+                <Avatar
+                  size={26}
+                  icon={<UserOutlined />}
+                  style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)', flexShrink: 0 }}
+                />
+                <div className="profile-copy">
+                  <span className="username">{user?.username || '用户'}</span>
+                </div>
+                <CaretDownOutlined className="profile-caret" />
+              </div>
             </Dropdown>
           </div>
         </Header>
+
         <Content className="content">
           <div className="content-container">
             <Outlet />

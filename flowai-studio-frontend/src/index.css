@@ -2,43 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
+/* ============================================================
+   Reset & Base
+   ============================================================ */
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans SC', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color: #1c2433;
+  background: #f7f8fa;
 }
 
-/* 滚动条样式 */
+/* ============================================================
+   Global scrollbar
+   ============================================================ */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: #dde2ec;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: #c4b5fd;
 }
 
-/* 通用工具类 */
+/* ============================================================
+   Utility classes
+   ============================================================ */
 .flex-center {
   display: flex;
   align-items: center;
@@ -51,23 +65,85 @@ body {
   white-space: nowrap;
 }
 
-/* ReactFlow 自定义样式 */
+/* ============================================================
+   Antd global overrides
+   ============================================================ */
+
+/* Modal */
+.ant-modal-content {
+  border-radius: 20px !important;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
+}
+
+.ant-modal-header {
+  padding: 18px 24px 14px !important;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.ant-modal-body {
+  padding: 12px 24px 16px !important;
+}
+
+.ant-modal-footer {
+  padding: 12px 24px 18px !important;
+  border-top: 1px solid #f0f2f5;
+}
+
+/* Button */
+.ant-btn {
+  font-weight: 500;
+  transition-duration: 0.15s !important;
+}
+
+.ant-btn-primary {
+  background: #7c3aed !important;
+  border-color: #7c3aed !important;
+}
+
+.ant-btn-primary:not(:disabled):hover {
+  background: #6d28d9 !important;
+  border-color: #6d28d9 !important;
+}
+
+/* Input */
+.ant-input:focus,
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused {
+  border-color: #7c3aed !important;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1) !important;
+}
+
+.ant-select-focused .ant-select-selector {
+  border-color: #7c3aed !important;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1) !important;
+}
+
+/* Table */
+.ant-table-thead > tr > th {
+  background: #f7f8fa !important;
+}
+
+/* ============================================================
+   ReactFlow custom styles
+   ============================================================ */
 .react-flow__node {
-  border-radius: 8px;
-  border: 1px solid #d9d9d9;
+  border-radius: 12px;
+  border: 1px solid #e8eaed;
   background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .react-flow__node.selected {
-  border-color: #1677ff;
-  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2);
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.15), 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .react-flow__edge-path {
-  stroke: #b1b1b7;
+  stroke: #dde2ec;
   stroke-width: 2;
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #1677ff;
+  stroke: #7c3aed;
 }
