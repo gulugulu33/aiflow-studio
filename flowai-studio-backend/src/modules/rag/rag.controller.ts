@@ -73,6 +73,14 @@ export class RAGController {
     return this.ragService.uploadDocument(userId, knowledgeBaseId, file);
   }
 
+  @Get('documents/:documentId/chunks')
+  getDocumentChunks(
+    @CurrentUser('userId') userId: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.ragService.getDocumentChunks(userId, documentId);
+  }
+
   @Delete('documents/:documentId')
   deleteDocument(
     @CurrentUser('userId') userId: string,

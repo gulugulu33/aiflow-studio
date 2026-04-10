@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Input, Table, message, Modal, Upload, Space, Typography, Empty, Tag } from 'antd'
+import { Button, Input, Table, message, Modal, Upload, Space, Typography, Empty, Spin } from 'antd'
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -9,11 +9,14 @@ import {
   FileTextOutlined,
   InboxOutlined,
   DatabaseOutlined,
+  BlockOutlined,
+  ArrowLeftOutlined,
 } from '@ant-design/icons'
 import { useStore } from '../store'
+import { DocumentChunk } from '../types'
 import './KnowledgeBase.css'
 
-const { Text, Paragraph } = Typography
+const { Text } = Typography
 const { TextArea } = Input
 const { Dragger } = Upload
 
@@ -28,6 +31,7 @@ const KnowledgeBase: React.FC = () => {
     deleteKnowledgeBase,
     uploadDocument,
     deleteDocument,
+    fetchDocumentChunks,
   } = useStore()
   const [modalVisible, setModalVisible] = useState(false)
   const [documentModalVisible, setDocumentModalVisible] = useState(false)
@@ -35,6 +39,12 @@ const KnowledgeBase: React.FC = () => {
   const [selectedKb, setSelectedKb] = useState<any>(null)
   const [formData, setFormData] = useState({ name: '', description: '' })
   const [documents, setDocuments] = useState<any[]>([])
+
+  // Chunk preview state
+  const [chunkModalVisible, setChunkModalVisible] = useState(false)
+  const [chunkDocName, setChunkDocName] = useState('')
+  const [chunks, setChunks] = useState<DocumentChunk[]>([])
+  const [chunksLoading, setChunksLoading] = useState(false)
 
   useEffect(() => {
     fetchKnowledgeBases()
@@ -115,6 +125,21 @@ const KnowledgeBase: React.FC = () => {
       setDocuments(updatedKb.documents || [])
     } catch {
       message.error('删除失败，请重试')
+    }
+  }
+
+  const handleViewChunks = async (doc: any) => {
+    setChunkDocName(doc.name)
+    setChunks([])
+    setChunkModalVisible(true)
+    setChunksLoading(true)
+    try {
+      const result = await fetchDocumentChunks(doc.id)
+      setChunks(result.chunks || [])
+    } catch {
+      message.error('获取分块失败')
+    } finally {
+      setChunksLoading(false)
     }
   }
 
@@ -324,26 +349,41 @@ const KnowledgeBase: React.FC = () => {
                     title: '大小',
                     dataIndex: 'size',
                     key: 'size',
+                    width: 100,
                     render: (size: number) => `${(size / 1024).toFixed(1)} KB`,
                   },
                   {
                     title: '上传时间',
                     dataIndex: 'createdAt',
                     key: 'createdAt',
+                    width: 170,
                     render: (time: string) => new Date(time).toLocaleString('zh-CN'),
                   },
                   {
                     title: '操作',
                     key: 'action',
+                    width: 140,
                     render: (_: any, record: any) => (
-                      <Button
-                        icon={<DeleteOutlined />}
-                        size="small"
-                        danger
-                        type="text"
-                        onClick={() => handleDeleteDocument(record.id)}
-                        loading={isLoading}
-                      />
+                      <Space size="small">
+                        <Button
+                          icon={<BlockOutlined />}
+                          size="small"
+                          type="text"
+                          onClick={() => handleViewChunks(record)}
+                          className="action-btn"
+                        >
+                          分块
+                        </Button>
+                        <Button
+                          icon={<DeleteOutlined />}
+                          size="small"
+                          danger
+                          type="text"
+                          onClick={() => handleDeleteDocument(record.id)}
+                          loading={isLoading}
+                          className="action-btn"
+                        />
+                      </Space>
                     ),
                   },
                 ]}
@@ -354,6 +394,58 @@ const KnowledgeBase: React.FC = () => {
               />
             )}
           </div>
+        </div>
+      </Modal>
+
+      {/* Chunk Preview Modal */}
+      <Modal
+        title={
+          <div className="chunk-modal-title">
+            <button className="chunk-back-btn" onClick={() => setChunkModalVisible(false)}>
+              <ArrowLeftOutlined />
+            </button>
+            <BlockOutlined />
+            <span>文档分块预览</span>
+            <span className="chunk-doc-name">{chunkDocName}</span>
+          </div>
+        }
+        open={chunkModalVisible}
+        onCancel={() => setChunkModalVisible(false)}
+        width={720}
+        footer={null}
+      >
+        <div className="chunk-modal-body">
+          {chunksLoading ? (
+            <div className="chunk-loading">
+              <Spin size="large" />
+              <Text style={{ color: 'var(--c-text-secondary)', marginTop: 12 }}>正在加载分块数据…</Text>
+            </div>
+          ) : chunks.length > 0 ? (
+            <>
+              <div className="chunk-summary">
+                共 <strong>{chunks.length}</strong> 个分块
+              </div>
+              <div className="chunk-list">
+                {chunks.map((chunk, idx) => (
+                  <div key={chunk.id} className="chunk-card">
+                    <div className="chunk-card-header">
+                      <span className="chunk-index">#{idx + 1}</span>
+                      <span className="chunk-meta">
+                        {chunk.content.length} 字符
+                      </span>
+                    </div>
+                    <pre className="chunk-content">{chunk.content}</pre>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <Empty
+              description="该文档暂无分块数据"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              style={{ padding: '48px 0' }}
+            />
+          )}
         </div>
       </Modal>
     </div>
