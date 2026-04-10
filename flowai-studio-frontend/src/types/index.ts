@@ -144,6 +144,23 @@ export interface Document {
   updatedAt: string
 }
 
+export interface DocumentChunk {
+  id: string
+  content: string
+  chunkIndex: number
+  startIndex: number
+  endIndex: number
+  metadata?: string
+  createdAt: string
+}
+
+export interface DocumentChunksResponse {
+  documentId: string
+  documentName: string
+  totalChunks: number
+  chunks: DocumentChunk[]
+}
+
 // Skill工具相关类型
 export interface Skill {
   id: string
