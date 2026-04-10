@@ -6,6 +6,8 @@ import {
   StopOutlined,
   ArrowLeftOutlined,
   AppstoreOutlined,
+  BugOutlined,
+  SettingOutlined,
 } from '@ant-design/icons'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
@@ -13,7 +15,10 @@ import { ReactFlowProvider } from '@xyflow/react'
 import WorkflowCanvas from '../components/workflow/WorkflowCanvas'
 import NodePanel from '../components/workflow/NodePanel'
 import ConfigPanel from '../components/workflow/ConfigPanel'
+import RunPanel from '../components/workflow/RunPanel'
 import './AppEditor.css'
+
+type RightPanel = 'config' | 'debug'
 
 const AppEditor: React.FC = () => {
   const { appId } = useParams<{ appId: string }>()
@@ -35,6 +40,7 @@ const AppEditor: React.FC = () => {
   } = useStore()
 
   const [isRunning, setIsRunning] = useState(false)
+  const [rightPanel, setRightPanel] = useState<RightPanel>('config')
 
   useEffect(() => {
     const initEditor = async () => {
@@ -84,6 +90,7 @@ const AppEditor: React.FC = () => {
     }
     try {
       setIsRunning(true)
+      setRightPanel('debug') // Auto-switch to debug panel
       await streamRunWorkflow(workflowId, {})
       message.success('工作流执行完成')
     } catch {
@@ -128,6 +135,23 @@ const AppEditor: React.FC = () => {
           </div>
         </div>
 
+        <div className="editor-topbar-center">
+          <div className="editor-panel-tabs">
+            <button
+              className={`editor-panel-tab ${rightPanel === 'config' ? 'editor-panel-tab--active' : ''}`}
+              onClick={() => setRightPanel('config')}
+            >
+              <SettingOutlined /> 配置
+            </button>
+            <button
+              className={`editor-panel-tab ${rightPanel === 'debug' ? 'editor-panel-tab--active' : ''}`}
+              onClick={() => setRightPanel('debug')}
+            >
+              <BugOutlined /> 调试
+            </button>
+          </div>
+        </div>
+
         <div className="editor-topbar-right">
           <Button
             size="small"
@@ -163,7 +187,7 @@ const AppEditor: React.FC = () => {
           <div className="editor-canvas-wrapper">
             <WorkflowCanvas />
           </div>
-          <ConfigPanel />
+          {rightPanel === 'config' ? <ConfigPanel /> : <RunPanel />}
         </div>
       </ReactFlowProvider>
     </div>

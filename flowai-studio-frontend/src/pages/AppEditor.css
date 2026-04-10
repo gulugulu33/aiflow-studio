@@ -87,6 +87,47 @@
   text-overflow: ellipsis;
 }
 
+/* ---- Center: panel tabs ---- */
+.editor-topbar-center {
+  display: flex;
+  align-items: center;
+}
+
+.editor-panel-tabs {
+  display: flex;
+  background: var(--c-bg);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.editor-panel-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.editor-panel-tab:hover {
+  color: var(--c-text-secondary);
+}
+
+.editor-panel-tab--active {
+  background: var(--c-bg-card);
+  color: var(--c-text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* ---- Right section ---- */
 .editor-topbar-right {
   display: flex;
   align-items: center;
