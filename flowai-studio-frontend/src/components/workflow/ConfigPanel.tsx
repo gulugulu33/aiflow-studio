@@ -7,8 +7,14 @@ const { Text } = Typography
 const { Option } = Select
 
 const ConfigPanel: React.FC = () => {
-  const { selectedNode, updateNodeData } = useStore()
+  const { selectedNode, updateNodeData, knowledgeBases, fetchKnowledgeBases, skills, fetchSkills } = useStore()
   const [form] = Form.useForm()
+
+  // 加载知识库和工具列表
+  useEffect(() => {
+    fetchKnowledgeBases()
+    fetchSkills()
+  }, [fetchKnowledgeBases, fetchSkills])
 
   useEffect(() => {
     if (selectedNode) {
@@ -78,7 +84,11 @@ const ConfigPanel: React.FC = () => {
           <>
             {commonFields}
             <Form.Item name="knowledgeBaseId" label="知识库" rules={[{ required: true }]}>
-              <Select placeholder="选择一个知识库" />
+              <Select placeholder="选择一个知识库">
+                {Array.isArray(knowledgeBases) && knowledgeBases.map(kb => (
+                  <Option key={kb.id} value={kb.id}>{kb.name}</Option>
+                ))}
+              </Select>
             </Form.Item>
             <Form.Item name="query" label="检索查询" rules={[{ required: true }]}>
               <Input.TextArea placeholder="输入检索内容，可使用 {{变量}}" />
@@ -93,7 +103,11 @@ const ConfigPanel: React.FC = () => {
           <>
             {commonFields}
             <Form.Item name="skillId" label="选择工具" rules={[{ required: true }]}>
-              <Select placeholder="选择一个内置或自定义工具" />
+              <Select placeholder="选择一个内置或自定义工具">
+                {Array.isArray(skills) && skills.map(s => (
+                  <Option key={s.id} value={s.id}>{s.name}</Option>
+                ))}
+              </Select>
             </Form.Item>
             <Form.Item label="工具参数 (JSON)">
               <Form.Item name="parameters" noStyle>
