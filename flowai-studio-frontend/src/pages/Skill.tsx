@@ -130,10 +130,10 @@ const Skill: React.FC = () => {
 
   const getCardMenu = (skill: any) => ({
     items: [
-      { key: 'edit', label: '编辑', icon: <EditOutlined />, onClick: () => handleEditSkill(skill) },
-      { key: 'run', label: '执行', icon: <PlayCircleOutlined />, onClick: () => handleExecuteSkill(skill) },
+      { key: 'edit', label: '编辑', icon: <EditOutlined />, onClick: (e: any) => { e.domEvent?.stopPropagation(); handleEditSkill(skill) } },
+      { key: 'run', label: '执行', icon: <PlayCircleOutlined />, onClick: (e: any) => { e.domEvent?.stopPropagation(); handleExecuteSkill(skill) } },
       { type: 'divider' as const },
-      { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true, onClick: () => handleDeleteSkill(skill.id) },
+      { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true, onClick: (e: any) => { e.domEvent?.stopPropagation(); handleDeleteSkill(skill.id) } },
     ],
   })
 
