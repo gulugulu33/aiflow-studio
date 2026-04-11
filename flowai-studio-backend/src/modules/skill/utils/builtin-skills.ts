@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { VM } from 'vm2';
 
 export async function executeBuiltinSkill(type: string, params: Record<string, any>): Promise<any> {
   switch (type) {
@@ -10,6 +11,10 @@ export async function executeBuiltinSkill(type: string, params: Record<string, a
       return executeJsonSkill(params);
     case 'regex':
       return executeRegexSkill(params);
+    case 'calculator':
+      return executeCalculatorSkill(params);
+    case 'code':
+      return executeCodeSkill(params);
     default:
       throw new Error(`Unknown builtin skill type: ${type}`);
   }
@@ -95,5 +100,67 @@ function executeRegexSkill(params: any): any {
     };
   } catch (error) {
     throw new Error(`Invalid regex pattern: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+function executeCalculatorSkill(params: any): any {
+  const { expression } = params;
+
+  if (!expression || typeof expression !== 'string') {
+    throw new Error('expression (string) is required for calculator skill');
+  }
+
+  // Validate: only allow digits, operators, parentheses, spaces, dots
+  if (!/^[\d\s+\-*/().%^]+$/.test(expression)) {
+    throw new Error('Invalid expression: only numbers and basic operators (+, -, *, /, %, ^, parentheses) are allowed');
+  }
+
+  try {
+    // Replace ^ with ** for exponentiation
+    const sanitized = expression.replace(/\^/g, '**');
+    const vm = new VM({ timeout: 1000, sandbox: {} });
+    const result = vm.run(sanitized);
+
+    if (typeof result !== 'number' || !isFinite(result)) {
+      throw new Error('Expression did not evaluate to a valid number');
+    }
+
+    return { expression, result };
+  } catch (error) {
+    throw new Error(`Calculator error: ${error instanceof Error ? error.message : 'Invalid expression'}`);
+  }
+}
+
+function executeCodeSkill(params: any): any {
+  const { code, language = 'javascript' } = params;
+
+  if (!code || typeof code !== 'string') {
+    throw new Error('code (string) is required for code execution skill');
+  }
+
+  if (language !== 'javascript') {
+    throw new Error('Currently only JavaScript code execution is supported');
+  }
+
+  try {
+    const logs: string[] = [];
+    const vm = new VM({
+      timeout: 5000,
+      sandbox: {
+        console: {
+          log: (...args: any[]) => logs.push(args.map(String).join(' ')),
+          warn: (...args: any[]) => logs.push('[WARN] ' + args.map(String).join(' ')),
+          error: (...args: any[]) => logs.push('[ERROR] ' + args.map(String).join(' ')),
+        },
+      },
+    });
+    const result = vm.run(code);
+
+    return {
+      result: result !== undefined ? result : null,
+      logs,
+    };
+  } catch (error) {
+    throw new Error(`Code execution error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

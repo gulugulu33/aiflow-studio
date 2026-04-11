@@ -194,6 +194,31 @@ export class SkillService {
           groups: 'object',
         },
       },
+      {
+        type: 'calculator',
+        name: '计算器',
+        description: '计算数学表达式，支持加减乘除、取余、乘方',
+        inputSchema: {
+          expression: 'string',
+        },
+        outputSchema: {
+          expression: 'string',
+          result: 'number',
+        },
+      },
+      {
+        type: 'code',
+        name: '代码执行',
+        description: '在安全沙箱中执行 JavaScript 代码',
+        inputSchema: {
+          code: 'string',
+          language: 'string',
+        },
+        outputSchema: {
+          result: 'any',
+          logs: 'array',
+        },
+      },
     ];
   }
 }
