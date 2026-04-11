@@ -3,7 +3,6 @@ import { Button, message, Tag, Tooltip } from 'antd'
 import {
   SaveOutlined,
   PlayCircleOutlined,
-  StopOutlined,
   ArrowLeftOutlined,
   AppstoreOutlined,
   BugOutlined,
@@ -34,12 +33,9 @@ const AppEditor: React.FC = () => {
     edges,
     isLoading,
     saveWorkflow,
-    streamRunWorkflow,
     executionStatus,
-    setExecutionStatus,
   } = useStore()
 
-  const [isRunning, setIsRunning] = useState(false)
   const [rightPanel, setRightPanel] = useState<RightPanel>('config')
 
   // 使用 ref 防止 React StrictMode 下 useEffect 重复执行导致弹两次错误
@@ -86,28 +82,9 @@ const AppEditor: React.FC = () => {
     }
   }
 
-  const handleRun = async () => {
-    const workflowId = currentWorkflow?.id
-    if (!workflowId) {
-      message.error('未找到有效的工作流')
-      return
-    }
-    try {
-      setIsRunning(true)
-      setRightPanel('debug') // Auto-switch to debug panel
-      await streamRunWorkflow(workflowId, {})
-      message.success('工作流执行完成')
-    } catch {
-      message.error('执行失败，请检查工作流配置')
-    } finally {
-      setIsRunning(false)
-    }
-  }
-
-  const handleStop = () => {
-    setIsRunning(false)
-    setExecutionStatus('stopped')
-    message.info('工作流已停止')
+  const handleRun = () => {
+    // 切换到调试面板，由 RunPanel 统一管理输入参数和运行
+    setRightPanel('debug')
   }
 
   const statusTagMap: Record<string, { color: string; label: string }> = {
@@ -166,21 +143,15 @@ const AppEditor: React.FC = () => {
           >
             保存
           </Button>
-          {isRunning ? (
-            <Button size="small" danger icon={<StopOutlined />} onClick={handleStop} className="editor-action-btn">
-              停止
-            </Button>
-          ) : (
-            <Button
-              size="small"
-              type="primary"
-              icon={<PlayCircleOutlined />}
-              onClick={handleRun}
-              className="editor-action-btn"
-            >
-              运行
-            </Button>
-          )}
+          <Button
+            size="small"
+            type="primary"
+            icon={<PlayCircleOutlined />}
+            onClick={handleRun}
+            className="editor-action-btn"
+          >
+            运行
+          </Button>
         </div>
       </header>
 
