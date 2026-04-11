@@ -6,6 +6,7 @@ import AppList from '../pages/AppList'
 import AppEditor from '../pages/AppEditor'
 import KnowledgeBase from '../pages/KnowledgeBase'
 import Skill from '../pages/Skill'
+import McpManager from '../pages/McpManager'
 import Debug from '../pages/Debug'
 import { useStore } from '../store'
 
@@ -35,6 +36,7 @@ export const router = createBrowserRouter(
         <Route path="/apps/:appId/editor" element={<AppEditor />} />
         <Route path="/knowledge-bases" element={<KnowledgeBase />} />
         <Route path="/tools" element={<Skill />} />
+        <Route path="/mcp" element={<McpManager />} />
         <Route path="/debug" element={<Debug />} />
       </Route>
       

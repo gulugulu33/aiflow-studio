@@ -1,103 +1,249 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../../common/services/prisma.service';
+import { McpClient, McpTool, McpToolResult } from './mcp-client';
+
+/**
+ * MCP 服务器配置 DTO
+ */
+export interface CreateMcpServerDto {
+  name: string;
+  description?: string;
+  transportType?: 'stdio' | 'sse';
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+}
+
+export interface UpdateMcpServerDto {
+  name?: string;
+  description?: string;
+  transportType?: 'stdio' | 'sse';
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  isActive?: boolean;
+}
 
 @Injectable()
 export class McpService {
-  private tools: Map<string, { 
-    name: string; 
-    description: string; 
-    inputSchema: any;
-    handler: (params: Record<string, unknown>) => Promise<unknown> 
-  }> = new Map();
+  private readonly logger = new Logger(McpService.name);
 
-  constructor() {
-    this.registerBuiltinTools();
-  }
+  // 活跃的 MCP Client 连接池：key = serverId
+  private clients = new Map<string, McpClient>();
 
-  private registerBuiltinTools() {
-    // 注册内置MCP工具
-    this.tools.set('echo', {
-      name: 'echo',
-      description: '回显输入的消息',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          message: { type: 'string', description: '要回显的消息' }
-        },
-        required: ['message']
-      },
-      handler: async (params: Record<string, unknown>) => {
-        return { message: params.message };
-      },
-    });
+  constructor(private prisma: PrismaService) {}
 
-    this.tools.set('calculator', {
-      name: 'calculator',
-      description: '执行基础算术运算',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          a: { type: 'number', description: '第一个操作数' },
-          b: { type: 'number', description: '第二个操作数' },
-          operation: { 
-            type: 'string', 
-            enum: ['add', 'subtract', 'multiply', 'divide'],
-            description: '运算符' 
-          }
-        },
-        required: ['a', 'b', 'operation']
-      },
-      handler: async (params: Record<string, unknown>) => {
-        const { a, b, operation } = params as { a: number; b: number; operation: string };
-        let result: number;
-        switch (operation) {
-          case 'add':
-            result = a + b;
-            break;
-          case 'subtract':
-            result = a - b;
-            break;
-          case 'multiply':
-            result = a * b;
-            break;
-          case 'divide':
-            if (b === 0) throw new Error('Cannot divide by zero');
-            result = a / b;
-            break;
-          default:
-            throw new Error(`Unknown operation: ${operation}`);
-        }
-        return { result };
+  // ========== CRUD ==========
+
+  async create(userId: string, dto: CreateMcpServerDto) {
+    if (dto.transportType === 'stdio' && !dto.command) {
+      throw new BadRequestException('stdio 模式必须提供启动命令 (command)');
+    }
+    if (dto.transportType === 'sse' && !dto.url) {
+      throw new BadRequestException('SSE 模式必须提供服务器 URL');
+    }
+
+    return this.prisma.mcpServer.create({
+      data: {
+        name: dto.name,
+        description: dto.description,
+        transportType: dto.transportType || 'stdio',
+        command: dto.command,
+        args: dto.args ? JSON.stringify(dto.args) : null,
+        env: dto.env ? JSON.stringify(dto.env) : null,
+        url: dto.url,
+        userId,
       },
     });
   }
 
-  async getTools() {
-    return Array.from(this.tools.values()).map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
+  async findAll(userId: string) {
+    const servers = await this.prisma.mcpServer.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // 附加连接状态
+    return servers.map((s) => ({
+      ...s,
+      args: s.args ? JSON.parse(s.args) : [],
+      env: s.env ? JSON.parse(s.env) : {},
+      isConnected: this.clients.has(s.id) && this.clients.get(s.id)!.isConnected(),
     }));
   }
 
-  async invokeTool(userId: string, toolName: string, params: Record<string, unknown>) {
-    const tool = this.tools.get(toolName);
-    if (!tool) {
-      throw new NotFoundException(`Tool ${toolName} not found`);
+  async findOne(userId: string, id: string) {
+    const server = await this.prisma.mcpServer.findUnique({ where: { id } });
+    if (!server || server.userId !== userId) {
+      throw new NotFoundException('MCP 服务器不存在');
+    }
+    return {
+      ...server,
+      args: server.args ? JSON.parse(server.args) : [],
+      env: server.env ? JSON.parse(server.env) : {},
+      isConnected: this.clients.has(id) && this.clients.get(id)!.isConnected(),
+    };
+  }
+
+  async update(userId: string, id: string, dto: UpdateMcpServerDto) {
+    await this.findOne(userId, id);
+
+    // 如果正在连接，先断开
+    if (this.clients.has(id)) {
+      this.clients.get(id)!.disconnect();
+      this.clients.delete(id);
+    }
+
+    return this.prisma.mcpServer.update({
+      where: { id },
+      data: {
+        ...dto,
+        args: dto.args ? JSON.stringify(dto.args) : undefined,
+        env: dto.env ? JSON.stringify(dto.env) : undefined,
+      },
+    });
+  }
+
+  async remove(userId: string, id: string) {
+    await this.findOne(userId, id);
+
+    // 断开连接
+    if (this.clients.has(id)) {
+      this.clients.get(id)!.disconnect();
+      this.clients.delete(id);
+    }
+
+    return this.prisma.mcpServer.delete({ where: { id } });
+  }
+
+  // ========== 连接管理 ==========
+
+  /**
+   * 连接到指定 MCP Server
+   */
+  async connectServer(userId: string, serverId: string): Promise<{ tools: McpTool[] }> {
+    const server = await this.findOne(userId, serverId);
+
+    if (server.transportType !== 'stdio') {
+      throw new BadRequestException('当前仅支持 stdio 传输方式');
+    }
+
+    if (!server.command) {
+      throw new BadRequestException('MCP 服务器未配置启动命令');
+    }
+
+    // 如果已连接，先断开
+    if (this.clients.has(serverId)) {
+      this.clients.get(serverId)!.disconnect();
+    }
+
+    const args = Array.isArray(server.args) ? server.args : [];
+    const env = typeof server.env === 'object' && server.env ? server.env : {};
+
+    const client = new McpClient(server.command, args, env as Record<string, string>);
+
+    try {
+      await client.connect();
+      this.clients.set(serverId, client);
+      this.logger.log(`MCP Server "${server.name}" 连接成功`);
+
+      const tools = await client.listTools();
+      return { tools };
+    } catch (err) {
+      client.disconnect();
+      throw new BadRequestException(
+        `连接 MCP Server "${server.name}" 失败: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
+  /**
+   * 断开指定 MCP Server
+   */
+  async disconnectServer(userId: string, serverId: string): Promise<void> {
+    await this.findOne(userId, serverId);
+
+    if (this.clients.has(serverId)) {
+      this.clients.get(serverId)!.disconnect();
+      this.clients.delete(serverId);
+      this.logger.log(`MCP Server ${serverId} 已断开`);
+    }
+  }
+
+  // ========== 工具操作 ==========
+
+  /**
+   * 获取已连接服务器的工具列表
+   */
+  async listTools(userId: string, serverId: string): Promise<McpTool[]> {
+    await this.findOne(userId, serverId);
+
+    const client = this.clients.get(serverId);
+    if (!client || !client.isConnected()) {
+      throw new BadRequestException('MCP Server 未连接，请先连接');
+    }
+
+    return client.listTools();
+  }
+
+  /**
+   * 调用 MCP 工具
+   */
+  async callTool(
+    userId: string,
+    serverId: string,
+    toolName: string,
+    args: Record<string, any> = {},
+  ): Promise<McpToolResult> {
+    await this.findOne(userId, serverId);
+
+    const client = this.clients.get(serverId);
+    if (!client || !client.isConnected()) {
+      throw new BadRequestException('MCP Server 未连接，请先连接');
     }
 
     try {
-      const result = await tool.handler(params);
-      return {
-        success: true,
-        tool: toolName,
-        result,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        tool: toolName,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
+      return await client.callTool(toolName, args);
+    } catch (err) {
+      throw new BadRequestException(
+        `调用工具 "${toolName}" 失败: ${err instanceof Error ? err.message : err}`,
+      );
     }
+  }
+
+  /**
+   * 获取所有已连接服务器的所有工具（聚合）
+   */
+  async listAllTools(userId: string): Promise<Array<McpTool & { serverId: string; serverName: string }>> {
+    const servers = await this.findAll(userId);
+    const allTools: Array<McpTool & { serverId: string; serverName: string }> = [];
+
+    for (const server of servers) {
+      const client = this.clients.get(server.id);
+      if (client && client.isConnected()) {
+        try {
+          const tools = await client.listTools();
+          for (const tool of tools) {
+            allTools.push({ ...tool, serverId: server.id, serverName: server.name });
+          }
+        } catch {
+          // 跳过出错的服务器
+        }
+      }
+    }
+
+    return allTools;
+  }
+
+  /**
+   * 应用关闭时清理所有连接
+   */
+  onModuleDestroy() {
+    for (const [id, client] of this.clients) {
+      client.disconnect();
+    }
+    this.clients.clear();
   }
 }
