@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button, Modal, Form, Input, message, Empty, Dropdown, Spin } from 'antd'
 import {
   PlusOutlined,
@@ -13,23 +13,54 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
 import { Application } from '../types'
+import { DEMO_APP_NAME, DEMO_NODES, DEMO_EDGES } from '../constants/demoWorkflow'
 import './AppList.css'
 
 const { Search } = Input
 
 const AppList: React.FC = () => {
   const navigate = useNavigate()
-  const { apps, isLoading, fetchApps, createApp, updateApp, deleteApp, publishApp, unpublishApp } = useStore()
+  const {
+    apps, isLoading, fetchApps, createApp, updateApp, deleteApp, publishApp, unpublishApp,
+    createWorkflow, saveWorkflow,
+  } = useStore()
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [currentApp, setCurrentApp] = useState<Application | null>(null)
   const [form] = Form.useForm()
   const [searchText, setSearchText] = useState('')
+  const demoCreating = useRef(false) // 防止重复创建示例应用
 
   useEffect(() => {
     fetchApps()
   }, [])
+
+  // 应用列表为空时，自动创建示例应用（仅执行一次）
+  useEffect(() => {
+    const maybeCreateDemo = async () => {
+      const safeApps = Array.isArray(apps) ? apps : []
+      if (isLoading || safeApps.length > 0 || demoCreating.current) return
+      demoCreating.current = true
+      try {
+        const demoApp = await createApp({
+          name: DEMO_APP_NAME,
+          description: '包含全部 7 种节点类型（开始、用户输入、RAG、大模型、条件分支、工具、输出）的示例工作流，可自由修改或删除。',
+        })
+        // 为示例应用创建预置工作流
+        const wf = await createWorkflow(demoApp.id, {
+          name: '示例工作流（全节点演示）',
+          description: '覆盖所有节点类型的完整 RAG + 条件分支流程',
+        })
+        await saveWorkflow(wf.id, { nodes: DEMO_NODES as any, edges: DEMO_EDGES as any })
+        message.success('已为你创建示例应用，点击查看完整工作流 🎉')
+      } catch {
+        // 创建示例失败不影响用户使用
+        console.warn('示例应用创建失败')
+      }
+    }
+    maybeCreateDemo()
+  }, [apps, isLoading])
 
   const filteredApps = Array.isArray(apps)
     ? apps.filter(
