@@ -68,7 +68,9 @@ const AppList: React.FC = () => {
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, e?: any) => {
+    // 阻止事件冒泡，防止触发卡片的 onClick 跳转到编辑器
+    e?.domEvent?.stopPropagation?.()
     try {
       await deleteApp(id)
       message.success('应用删除成功')
@@ -85,15 +87,19 @@ const AppList: React.FC = () => {
     items: [
       {
         key: 'edit',
-        label: '编辑',
+        label: '编辑信息',
         icon: <EditOutlined />,
-        onClick: () => handleEdit(app),
+        onClick: (e: any) => {
+          e?.domEvent?.stopPropagation?.()
+          handleEdit(app)
+        },
       },
       app.status === 'draft'
         ? {
             key: 'publish',
             label: '发布',
-            onClick: async () => {
+            onClick: async (e: any) => {
+              e?.domEvent?.stopPropagation?.()
               try {
                 await publishApp(app.id)
                 message.success('应用发布成功')
@@ -106,7 +112,8 @@ const AppList: React.FC = () => {
         ? {
             key: 'unpublish',
             label: '下线',
-            onClick: async () => {
+            onClick: async (e: any) => {
+              e?.domEvent?.stopPropagation?.()
               try {
                 await unpublishApp(app.id)
                 message.success('应用已下线')
@@ -122,7 +129,7 @@ const AppList: React.FC = () => {
         label: '删除',
         icon: <DeleteOutlined />,
         danger: true,
-        onClick: () => handleDelete(app.id),
+        onClick: (e: any) => handleDelete(app.id, e),
       },
     ].filter(Boolean),
   })
