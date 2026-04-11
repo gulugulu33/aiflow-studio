@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Card, Form, Input, Button, Typography, Alert, Checkbox, Space, Divider } from 'antd'
-import { LockOutlined, UserOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
+import { Form, Input, Button, Alert, Checkbox } from 'antd'
+import { LockOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../store'
 import './Auth.css'
-
-const { Title, Text } = Typography
 
 const Login: React.FC = () => {
   const navigate = useNavigate()
@@ -13,164 +11,144 @@ const Login: React.FC = () => {
   const [form] = Form.useForm()
   const [showError, setShowError] = useState(false)
 
-  // 监听错误变化
   useEffect(() => {
-    if (authError) {
-      setShowError(true)
-    }
+    if (authError) setShowError(true)
   }, [authError])
 
-  // 清除错误
   const handleClearError = () => {
     setShowError(false)
     clearError()
   }
 
-  // 根据错误类型获取Alert类型
   const getAlertType = () => {
-    if (!authError) return 'error'
-    
+    if (!authError) return 'error' as const
     switch (authError.type) {
-      case 'VALIDATION':
-      case 'AUTHENTICATION':
-        return 'error'
       case 'LOCKED':
-        return 'warning'
+        return 'warning' as const
       case 'NETWORK':
       case 'SERVER':
-        return 'info'
+        return 'info' as const
       default:
-        return 'error'
+        return 'error' as const
     }
   }
 
   const onSubmit = async (values: { username: string; password: string; remember?: boolean }) => {
     handleClearError()
-    
     try {
-      // 只发送 username 和 password，不包含 remember 字段
       const { username, password } = values
       await login({ username, password })
       navigate('/apps')
-    } catch (err: any) {
-      // 错误已经在store中处理，这里不需要额外处理
+    } catch (err) {
       console.error('Login error:', err)
     }
   }
 
   return (
-    <div className="auth-container">
-      <Card className="auth-card" title={<Title level={3} className="auth-title">FlowAI Studio</Title>}>
-        <Text className="auth-subtitle">AI应用低代码编排平台</Text>
-        
-        {showError && authError && (
-          <Alert
-            message={
-              authError.type === 'LOCKED' ? '账户锁定' : 
-              authError.type === 'NETWORK' ? '网络错误' :
-              authError.type === 'SERVER' ? '服务器错误' :
-              '登录失败'
-            }
-            description={
-              <div>
-                <div>{authError.message}</div>
-                {authError.type === 'NETWORK' && (
-                  <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-                    请检查网络连接或联系管理员
-                  </div>
-                )}
-                {authError.type === 'SERVER' && (
-                  <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-                    服务器暂时不可用，请稍后重试
-                  </div>
-                )}
-              </div>
-            }
-            type={getAlertType()}
-            showIcon
-            className="mb-4"
-            closable
-            onClose={handleClearError}
-          />
-        )}
-        
-        <Form
-          form={form}
-          onFinish={onSubmit}
-          layout="vertical"
-          className="auth-form"
-          onValuesChange={handleClearError}
-        >
-          <Form.Item
-            name="username"
-            label="用户名"
-            rules={[
-              { required: true, message: '请输入用户名' },
-              { min: 3, message: '用户名长度至少为3个字符' },
-              { max: 20, message: '用户名长度不能超过20个字符' },
-              {
-                pattern: /^[a-zA-Z0-9_]+$/,
-                message: '用户名只能包含字母、数字和下划线'
-              }
-            ]}
-            validateTrigger="onBlur"
-          >
-            <Input 
-              prefix={<UserOutlined />} 
-              placeholder="请输入用户名" 
-              disabled={isLoading}
+    <div className="auth-page">
+      {/* Left brand panel */}
+      <div className="auth-brand">
+        <div className="auth-brand-content">
+          <div className="auth-brand-logo">✦</div>
+          <h1 className="auth-brand-title">FlowAI Studio</h1>
+          <p className="auth-brand-desc">
+            可视化 AI 应用低代码编排平台
+            <br />
+            拖拽式工作流 · RAG 知识库 · 多模型接入
+          </p>
+        </div>
+        <div className="auth-brand-footer">
+          <span>© 2024 FlowAI Studio</span>
+        </div>
+      </div>
+
+      {/* Right form panel */}
+      <div className="auth-form-panel">
+        <div className="auth-form-wrapper">
+          <h2 className="auth-heading">登录</h2>
+          <p className="auth-subheading">欢迎回来，请登录你的账号</p>
+
+          {showError && authError && (
+            <Alert
+              message={authError.message}
+              type={getAlertType()}
+              showIcon
+              closable
+              onClose={handleClearError}
+              style={{ marginBottom: 20, borderRadius: 10 }}
             />
-          </Form.Item>
+          )}
 
-          <Form.Item
-            name="password"
-            label="密码"
-            rules={[
-              { required: true, message: '请输入密码' },
-              { min: 6, message: '密码长度至少为6个字符' }
-            ]}
-            validateTrigger="onBlur"
+          <Form
+            form={form}
+            onFinish={onSubmit}
+            layout="vertical"
+            className="auth-form"
+            onValuesChange={handleClearError}
+            requiredMark={false}
           >
-            <Input.Password 
-              prefix={<LockOutlined />} 
-              placeholder="请输入密码" 
-              disabled={isLoading}
-            />
-          </Form.Item>
-
-          <Form.Item name="remember" valuePropName="checked" noStyle>
-            <Checkbox disabled={isLoading}>记住我</Checkbox>
-          </Form.Item>
-
-          <Form.Item style={{ marginTop: 16 }}>
-            <Button
-              type="primary"
-              htmlType="submit"
-              className="auth-button"
-              loading={isLoading}
-              disabled={isLoading}
-              block
-              icon={isLoading ? null : <LockOutlined />}
+            <Form.Item
+              name="username"
+              label="用户名"
+              rules={[
+                { required: true, message: '请输入用户名' },
+                { min: 3, message: '用户名至少 3 个字符' },
+                { max: 20, message: '用户名不超过 20 个字符' },
+                { pattern: /^[a-zA-Z0-9_]+$/, message: '仅支持字母、数字和下划线' },
+              ]}
+              validateTrigger="onBlur"
             >
-              {isLoading ? '登录中...' : '登录'}
-            </Button>
-          </Form.Item>
-        </Form>
+              <Input
+                prefix={<UserOutlined />}
+                placeholder="请输入用户名"
+                disabled={isLoading}
+                size="large"
+              />
+            </Form.Item>
 
-        <Divider>
-          <Text type="secondary">或</Text>
-        </Divider>
+            <Form.Item
+              name="password"
+              label="密码"
+              rules={[
+                { required: true, message: '请输入密码' },
+                { min: 6, message: '密码至少 6 个字符' },
+              ]}
+              validateTrigger="onBlur"
+            >
+              <Input.Password
+                prefix={<LockOutlined />}
+                placeholder="请输入密码"
+                disabled={isLoading}
+                size="large"
+              />
+            </Form.Item>
 
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Text className="auth-link">
+            <div className="auth-form-extra">
+              <Form.Item name="remember" valuePropName="checked" noStyle>
+                <Checkbox disabled={isLoading}>记住我</Checkbox>
+              </Form.Item>
+            </div>
+
+            <Form.Item style={{ marginTop: 24 }}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                className="auth-submit-btn"
+                loading={isLoading}
+                disabled={isLoading}
+                block
+                size="large"
+              >
+                {isLoading ? '登录中…' : '登  录'}
+              </Button>
+            </Form.Item>
+          </Form>
+
+          <div className="auth-switch">
             还没有账号？ <Link to="/register">立即注册</Link>
-          </Text>
-          
-          <Text type="secondary" style={{ fontSize: 12, textAlign: 'center', display: 'block' }}>
-            忘记密码？请联系系统管理员重置
-          </Text>
-        </Space>
-      </Card>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,42 +1,45 @@
-import { useState, useEffect } from 'react';
-import { useStore } from '../../store';
-import { Form, Input, Select, Slider, Button, Typography, message, Empty, Card, Space } from 'antd';
-import { SaveOutlined } from '@ant-design/icons';
-import './ConfigPanel.css';
+import { useEffect } from 'react'
+import { useStore } from '../../store'
+import { Form, Input, Select, Slider, Typography, Empty } from 'antd'
+import './ConfigPanel.css'
 
-const { Title, Text } = Typography;
-const { Option } = Select;
+const { Text } = Typography
+const { Option } = Select
 
 const ConfigPanel: React.FC = () => {
-  const { selectedNode, updateNodeData } = useStore();
-  const [form] = Form.useForm();
+  const { selectedNode, updateNodeData, knowledgeBases, fetchKnowledgeBases, skills, fetchSkills } = useStore()
+  const [form] = Form.useForm()
+
+  // 加载知识库和工具列表
+  useEffect(() => {
+    fetchKnowledgeBases()
+    fetchSkills()
+  }, [fetchKnowledgeBases, fetchSkills])
 
   useEffect(() => {
     if (selectedNode) {
-      form.setFieldsValue(selectedNode.data);
+      form.setFieldsValue(selectedNode.data)
     } else {
-      form.resetFields();
+      form.resetFields()
     }
-  }, [selectedNode, form]);
+  }, [selectedNode, form])
 
-  const handleValuesChange = (changedValues: any, allValues: any) => {
+  const handleValuesChange = (_changedValues: any, allValues: any) => {
     if (selectedNode) {
-      updateNodeData(selectedNode.id, allValues);
+      updateNodeData(selectedNode.id, allValues)
     }
-  };
+  }
 
   const renderConfigForm = () => {
     if (!selectedNode) {
-      return (
-        <Empty description="请选择一个节点进行配置" style={{ marginTop: 100 }} />
-      );
+      return <Empty description="选择节点以编辑配置" className="config-panel-empty" />
     }
 
     const commonFields = (
       <Form.Item name="label" label="节点名称">
         <Input placeholder="输入节点名称" />
       </Form.Item>
-    );
+    )
 
     switch (selectedNode.type) {
       case 'start':
@@ -45,7 +48,7 @@ const ConfigPanel: React.FC = () => {
             {commonFields}
             <Text type="secondary">此节点为工作流的起点。</Text>
           </>
-        );
+        )
       case 'userInput':
         return (
           <>
@@ -54,7 +57,7 @@ const ConfigPanel: React.FC = () => {
               <Input placeholder="例如: question" />
             </Form.Item>
           </>
-        );
+        )
       case 'llm':
         return (
           <>
@@ -75,14 +78,16 @@ const ConfigPanel: React.FC = () => {
               <Slider min={0} max={1} step={0.1} />
             </Form.Item>
           </>
-        );
+        )
       case 'rag':
         return (
           <>
             {commonFields}
             <Form.Item name="knowledgeBaseId" label="知识库" rules={[{ required: true }]}>
               <Select placeholder="选择一个知识库">
-                {/* 此处应动态加载知识库列表 */}
+                {Array.isArray(knowledgeBases) && knowledgeBases.map(kb => (
+                  <Option key={kb.id} value={kb.id}>{kb.name}</Option>
+                ))}
               </Select>
             </Form.Item>
             <Form.Item name="query" label="检索查询" rules={[{ required: true }]}>
@@ -92,14 +97,16 @@ const ConfigPanel: React.FC = () => {
               <Slider min={1} max={10} step={1} />
             </Form.Item>
           </>
-        );
+        )
       case 'skill':
         return (
           <>
             {commonFields}
             <Form.Item name="skillId" label="选择工具" rules={[{ required: true }]}>
               <Select placeholder="选择一个内置或自定义工具">
-                {/* 此处应动态加载工具列表 */}
+                {Array.isArray(skills) && skills.map(s => (
+                  <Option key={s.id} value={s.id}>{s.name}</Option>
+                ))}
               </Select>
             </Form.Item>
             <Form.Item label="工具参数 (JSON)">
@@ -108,18 +115,20 @@ const ConfigPanel: React.FC = () => {
               </Form.Item>
             </Form.Item>
           </>
-        );
+        )
       case 'condition':
         return (
           <>
             {commonFields}
             <Text type="secondary">配置分支判断逻辑。</Text>
-            {/* 暂时简化实现 */}
             <Form.Item name="conditions" label="判断条件 (JSON)">
-              <Input.TextArea rows={6} placeholder='[{"variable": "{{llm_1.result}}", "operator": "contains", "value": "yes"}]' />
+              <Input.TextArea
+                rows={6}
+                placeholder='[{"variable": "{{llm_1.result}}", "operator": "contains", "value": "yes"}]'
+              />
             </Form.Item>
           </>
-        );
+        )
       case 'output':
         return (
           <>
@@ -128,19 +137,24 @@ const ConfigPanel: React.FC = () => {
               <Input.TextArea rows={4} placeholder="最终输出给用户的内容，支持 {{变量}}" />
             </Form.Item>
           </>
-        );
+        )
       default:
-        return <Empty description={`暂不支持 ${selectedNode.type} 节点的配置`} />;
+        return <Empty description={`暂不支持 ${selectedNode.type} 节点的配置`} />
     }
-  };
+  }
 
   return (
-    <Card title="节点配置" className="config-panel">
-      <Form form={form} layout="vertical" onValuesChange={handleValuesChange}>
-        {renderConfigForm()}
-      </Form>
-    </Card>
-  );
-};
+    <div className="config-panel">
+      <div className="config-panel-header">
+        <h3>{selectedNode ? '节点配置' : '配置'}</h3>
+      </div>
+      <div className="config-panel-body">
+        <Form form={form} layout="vertical" onValuesChange={handleValuesChange}>
+          {renderConfigForm()}
+        </Form>
+      </div>
+    </div>
+  )
+}
 
-export default ConfigPanel;
+export default ConfigPanel

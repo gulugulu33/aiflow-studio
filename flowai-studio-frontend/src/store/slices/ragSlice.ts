@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand'
-import { KnowledgeBase, Document } from '../../types'
+import { KnowledgeBase, Document, DocumentChunksResponse } from '../../types'
 import request from '../../utils/axios'
 
 export interface RAGSlice {
@@ -22,6 +22,7 @@ export interface RAGSlice {
   deleteKnowledgeBase: (id: string) => Promise<void>
   uploadDocument: (knowledgeBaseId: string, file: File) => Promise<Document>
   deleteDocument: (documentId: string) => Promise<void>
+  fetchDocumentChunks: (documentId: string) => Promise<DocumentChunksResponse>
   retrieve: (query: string, knowledgeBaseId: string, topK?: number) => Promise<any>
 }
 
@@ -168,6 +169,18 @@ export const createRAGSlice: StateCreator<RAGSlice> = (set, get) => ({
       set({ isLoading: false })
     } catch (error) {
       set({ error: 'Failed to delete document', isLoading: false })
+      throw error
+    }
+  },
+
+  fetchDocumentChunks: async (documentId) => {
+    set({ isLoading: true, error: null })
+    try {
+      const response = await request.get(`/rag/documents/${documentId}/chunks`) as any
+      set({ isLoading: false })
+      return response.data
+    } catch (error) {
+      set({ error: 'Failed to fetch document chunks', isLoading: false })
       throw error
     }
   },

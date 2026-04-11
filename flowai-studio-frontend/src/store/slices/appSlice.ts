@@ -10,7 +10,7 @@ export interface AppSlice {
   // Actions
   setApps: (apps: Application[]) => void
   setCurrentApp: (app: Application | null) => void
-  fetchApps: () => Promise<void>
+  fetchApps: () => Promise<Application[]>
   fetchAppById: (id: string) => Promise<Application>
   createApp: (data: CreateAppForm) => Promise<Application>
   updateApp: (id: string, data: Partial<CreateAppForm>) => Promise<Application>
@@ -32,13 +32,12 @@ export const createAppSlice: StateCreator<AppSlice> = (set, get) => ({
     set({ isLoading: true })
     try {
       const response = await request.get('/apps') as any
-      // 后端返回结构为 { success, data, message, timestamp }
-      // axios 拦截器返回 response.data，所以这里 response 就是后端返回的对象
       const apps = (Array.isArray(response.data) ? response.data : []) as Application[]
       set({ apps, isLoading: false })
+      return apps
     } catch (error) {
       set({ isLoading: false })
-      set({ apps: [] }) // 发生错误时确保 apps 为数组
+      set({ apps: [] })
       throw error
     }
   },

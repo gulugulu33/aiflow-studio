@@ -1,0 +1,197 @@
+/* ============================================================
+   RunPanel — Debug / Run panel for workflow editor
+   ============================================================ */
+.run-panel {
+  width: 320px;
+  height: 100%;
+  background: var(--c-bg-card);
+  border-left: 1px solid var(--c-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.run-panel-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--c-border-light);
+}
+
+.run-panel-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.run-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- Sections ---- */
+.run-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.run-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.run-input-textarea {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace !important;
+  font-size: 13px !important;
+  border-radius: 8px !important;
+  background: var(--c-bg) !important;
+}
+
+/* ---- Actions ---- */
+.run-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.run-actions .ant-btn {
+  border-radius: 8px !important;
+}
+
+.run-clear-btn {
+  flex-shrink: 0;
+}
+
+/* ---- Status bar ---- */
+.run-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.run-status--running {
+  background: var(--c-blue-light);
+  color: var(--c-blue);
+}
+
+.run-status--success {
+  background: var(--c-green-light);
+  color: var(--c-green);
+}
+
+.run-status--failed {
+  background: var(--c-red-light);
+  color: var(--c-red);
+}
+
+.run-status--stopped {
+  background: var(--c-bg);
+  color: var(--c-text-secondary);
+}
+
+/* ---- Results ---- */
+.run-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.run-result-card {
+  background: var(--c-bg);
+  border: 1px solid var(--c-border-light);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.run-result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.run-result-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text-primary);
+}
+
+.run-result-type {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+  font-weight: 500;
+}
+
+.run-result-output {
+  margin: 8px 0 0;
+  padding: 10px;
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-border-light);
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--c-text-primary);
+  overflow-x: auto;
+  max-height: 160px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.run-result-error {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--c-red-light);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--c-red);
+}
+
+/* ---- Empty ---- */
+.run-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- Scrollbar ---- */
+.run-panel-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.run-panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.run-panel-body::-webkit-scrollbar-thumb {
+  background: var(--c-border);
+  border-radius: 2px;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1200px) {
+  .run-panel {
+    width: 100% !important;
+    height: 260px;
+    border-left: none;
+    border-top: 1px solid var(--c-border);
+  }
+}

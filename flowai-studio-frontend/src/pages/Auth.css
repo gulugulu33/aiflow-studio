@@ -1,58 +1,181 @@
-.auth-container {
+/* ============================================================
+   Auth pages — Login / Register
+   ============================================================ */
+
+/* Full-page split layout */
+.auth-page {
+  display: flex;
   height: 100vh;
   width: 100vw;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f0f2f5;
-}
-
-.auth-card {
-  width: 400px;
-  max-width: 90vw;
-  border-radius: 12px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 
-.auth-title {
+/* ---- Left brand panel ---- */
+.auth-brand {
+  flex: 0 0 440px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 48px;
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 50%, #4c1d95 100%);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle decorative dots */
+.auth-brand::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.auth-brand::after {
+  content: '';
+  position: absolute;
+  bottom: -80px;
+  left: -40px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.auth-brand-content {
+  position: relative;
+  z-index: 1;
   text-align: center;
+}
+
+.auth-brand-logo {
+  font-size: 48px;
+  margin-bottom: 20px;
+  display: inline-block;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+}
+
+.auth-brand-title {
+  margin: 0 0 12px;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.auth-brand-desc {
   margin: 0;
-  color: #1677ff;
+  font-size: 15px;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.auth-brand-footer {
+  position: absolute;
+  bottom: 28px;
+  z-index: 1;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ---- Right form panel ---- */
+.auth-form-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: #fafbfc;
+  overflow-y: auto;
+}
+
+.auth-form-wrapper {
+  width: 100%;
+  max-width: 400px;
+}
+
+.auth-heading {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #1c2433;
+  letter-spacing: -0.02em;
+}
+
+.auth-subheading {
+  margin: 0 0 32px;
+  font-size: 14px;
+  color: #6b7a99;
+}
+
+/* ---- Form ---- */
+.auth-form .ant-form-item-label > label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1c2433;
+}
+
+.auth-form .ant-input-lg,
+.auth-form .ant-input-password-large .ant-input {
+  border-radius: 10px;
+}
+
+.auth-form .ant-input-affix-wrapper-lg {
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.auth-form-extra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: -4px;
+}
+
+/* ---- Submit button ---- */
+.auth-submit-btn {
+  height: 46px !important;
+  border-radius: 10px !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.1em;
+}
+
+/* ---- Bottom switch link ---- */
+.auth-switch {
+  text-align: center;
+  margin-top: 28px;
+  font-size: 14px;
+  color: #6b7a99;
+}
+
+.auth-switch a {
+  color: #7c3aed;
   font-weight: 600;
 }
 
-.auth-subtitle {
-  display: block;
-  text-align: center;
-  margin-bottom: 24px;
-  color: #666;
-  font-size: 14px;
-}
-
-.auth-form {
-  margin-top: 20px;
-}
-
-.auth-button {
-  height: 48px;
-  font-size: 16px;
-  font-weight: 500;
-  margin-top: 8px;
-}
-
-.auth-link {
-  display: block;
-  text-align: center;
-  margin-top: 16px;
-  font-size: 14px;
-  color: #1677ff;
-}
-
-.auth-link a {
-  font-weight: 500;
-}
-
-.auth-link a:hover {
+.auth-switch a:hover {
   text-decoration: underline;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 900px) {
+  .auth-brand {
+    display: none;
+  }
+
+  .auth-form-panel {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-form-wrapper {
+    max-width: 100%;
+  }
 }

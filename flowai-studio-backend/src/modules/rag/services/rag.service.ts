@@ -32,7 +32,7 @@ export class RAGService {
   async findKnowledgeBases(userId: string) {
     return this.prisma.knowledgeBase.findMany({
       where: { userId },
-      include: { documents: { select: { id: true, name: true, createdAt: true, status: true } } },
+      include: { documents: { select: { id: true, name: true, size: true, createdAt: true, status: true } } },
     });
   }
 
@@ -126,6 +126,42 @@ export class RAGService {
     await this.saveDocumentChunks(document.id, chunks);
 
     return document;
+  }
+
+  async getDocumentChunks(userId: string, documentId: string) {
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      include: { knowledgeBase: true },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    if (document.knowledgeBase.userId !== userId) {
+      throw new BadRequestException('You do not have permission to access this document');
+    }
+
+    const chunks = await this.prisma.documentChunk.findMany({
+      where: { documentId },
+      orderBy: { chunkIndex: 'asc' },
+      select: {
+        id: true,
+        content: true,
+        chunkIndex: true,
+        startIndex: true,
+        endIndex: true,
+        metadata: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      documentId,
+      documentName: document.name,
+      totalChunks: chunks.length,
+      chunks,
+    };
   }
 
   async deleteDocument(userId: string, documentId: string) {

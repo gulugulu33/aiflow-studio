@@ -34,7 +34,7 @@ export class AiController {
     @Body() streamRunDto: StreamRunDto,
     @Res() res: Response,
   ) {
-    return this.aiService.streamRun(userId, streamRunDto, res);
+    await this.aiService.streamRun(userId, streamRunDto, res);
   }
 
   @Post('chat')
@@ -44,7 +44,7 @@ export class AiController {
     @Body() chatDto: ChatDto,
     @Res() res: Response,
   ) {
-    return this.aiService.chat(userId, chatDto, res);
+    await this.aiService.chat(userId, chatDto, res);
   }
 
   @Get('chat-histories/:sessionId')

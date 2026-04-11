@@ -1,13 +1,13 @@
 import { useCallback } from 'react'
-import { useReactFlow, addEdge } from '@xyflow/react'
-import { 
-  PlayCircleOutlined, 
-  UserOutlined, 
-  MessageOutlined, 
-  BookOutlined, 
-  ToolOutlined, 
-  BranchesOutlined, 
-  ExportOutlined 
+import { useReactFlow } from '@xyflow/react'
+import {
+  PlayCircleOutlined,
+  UserOutlined,
+  MessageOutlined,
+  BookOutlined,
+  ToolOutlined,
+  BranchesOutlined,
+  ExportOutlined,
 } from '@ant-design/icons'
 import './NodePanel.css'
 
@@ -19,17 +19,17 @@ interface NodeType {
 }
 
 const nodeTypes: NodeType[] = [
-  { type: 'start', label: '开始', icon: <PlayCircleOutlined />, color: '#1677ff' },
-  { type: 'userInput', label: '用户输入', icon: <UserOutlined />, color: '#52c41a' },
-  { type: 'llm', label: '大模型', icon: <MessageOutlined />, color: '#722ed1' },
-  { type: 'rag', label: 'RAG检索', icon: <BookOutlined />, color: '#faad14' },
-  { type: 'skill', label: '工具', icon: <ToolOutlined />, color: '#13c2c2' },
-  { type: 'condition', label: '条件分支', icon: <BranchesOutlined />, color: '#ff4d4f' },
-  { type: 'output', label: '输出', icon: <ExportOutlined />, color: '#52c41a' },
+  { type: 'start', label: '开始', icon: <PlayCircleOutlined />, color: '#7c3aed' },
+  { type: 'userInput', label: '用户输入', icon: <UserOutlined />, color: '#059669' },
+  { type: 'llm', label: '大模型', icon: <MessageOutlined />, color: '#7c3aed' },
+  { type: 'rag', label: 'RAG检索', icon: <BookOutlined />, color: '#d97706' },
+  { type: 'skill', label: '工具', icon: <ToolOutlined />, color: '#0891b2' },
+  { type: 'condition', label: '条件分支', icon: <BranchesOutlined />, color: '#dc2626' },
+  { type: 'output', label: '输出', icon: <ExportOutlined />, color: '#059669' },
 ]
 
 const NodePanel: React.FC = () => {
-  const { setNodes, getZoom, screenToFlowPosition } = useReactFlow()
+  const { setNodes } = useReactFlow()
 
   const onDragStart = useCallback((event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData('application/reactflow', nodeType)
@@ -48,9 +48,6 @@ const NodePanel: React.FC = () => {
             className="node-item"
             draggable
             onDragStart={(e) => onDragStart(e, nodeType.type)}
-            style={{ 
-              borderLeft: `3px solid ${nodeType.color}`,
-            }}
           >
             <div className="node-item-icon" style={{ color: nodeType.color }}>
               {nodeType.icon}
