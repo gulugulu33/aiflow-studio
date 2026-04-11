@@ -8,6 +8,7 @@ import {
   LoadingOutlined,
   ClockCircleOutlined,
   ClearOutlined,
+  MinusCircleOutlined,
 } from '@ant-design/icons'
 import { useStore } from '../../store'
 import './RunPanel.css'
@@ -67,6 +68,8 @@ const RunPanel: React.FC = () => {
         return <CheckCircleOutlined style={{ color: 'var(--c-green)' }} />
       case 'failed':
         return <CloseCircleOutlined style={{ color: 'var(--c-red)' }} />
+      case 'skipped':
+        return <MinusCircleOutlined style={{ color: 'var(--c-text-tertiary)' }} />
       default:
         return <ClockCircleOutlined style={{ color: 'var(--c-text-tertiary)' }} />
     }

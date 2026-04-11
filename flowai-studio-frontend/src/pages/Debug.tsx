@@ -8,6 +8,12 @@ import {
   FileSearchOutlined,
   MessageOutlined,
   NodeIndexOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  LoadingOutlined,
+  MinusCircleOutlined,
+  StopOutlined,
+  ClearOutlined,
 } from '@ant-design/icons'
 import { useStore } from '../store'
 import request from '../utils/axios'
@@ -30,6 +36,13 @@ interface ChatMessage {
   }[]
 }
 
+interface NodeExecState {
+  nodeId: string
+  status: 'running' | 'success' | 'failed' | 'skipped'
+  output?: any
+  error?: string
+}
+
 const Debug: React.FC = () => {
   const { isLoading, setIsLoading, apps, fetchApps, knowledgeBases, fetchKnowledgeBases } = useStore()
   const [input, setInput] = useState('')
@@ -39,8 +52,10 @@ const Debug: React.FC = () => {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>('')
   const [workflows, setWorkflows] = useState<any[]>([])
   const [selectedKbId, setSelectedKbId] = useState<string>('')
-  const [workflowInputs] = useState<Record<string, any>>({})
+  const [workflowInputsText, setWorkflowInputsText] = useState('{}')
   const [workflowResult, setWorkflowResult] = useState<any>(null)
+  const [nodeStates, setNodeStates] = useState<Record<string, NodeExecState>>({})
+  const [wfStatus, setWfStatus] = useState<'idle' | 'running' | 'success' | 'failed'>('idle')
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
@@ -156,20 +171,107 @@ const Debug: React.FC = () => {
       message.error('请选择工作流')
       return
     }
+
+    let inputs: Record<string, any> = {}
+    try {
+      inputs = JSON.parse(workflowInputsText)
+    } catch {
+      message.error('输入参数 JSON 格式错误')
+      return
+    }
+
     setIsLoading(true)
     setWorkflowResult(null)
+    setNodeStates({})
+    setWfStatus('running')
+
     try {
-      const response = await request.post(`/workflows/${selectedWorkflowId}/run`, {
-        inputs: workflowInputs,
-      }) as any
-      setWorkflowResult(response.data)
-      message.success('工作流执行成功')
+      const response = await fetch(`/api/workflows/${selectedWorkflowId}/run/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ inputs }),
+      })
+
+      if (!response.ok) throw new Error('Workflow execution failed')
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      const parser = createParser((event) => {
+        if (event.type === 'event') {
+          try {
+            const data = JSON.parse(event.data)
+            if (data.type === 'node_status') {
+              const { nodeId, status, output, error } = data.data
+              setNodeStates(prev => ({
+                ...prev,
+                [nodeId]: { nodeId, status, output, error },
+              }))
+            } else if (data.type === 'done') {
+              setWorkflowResult(data.data?.finalContext || data.data)
+              setWfStatus('success')
+            } else if (data.type === 'error') {
+              setWfStatus('failed')
+              message.error(data.data?.message || data.message || '工作流执行失败')
+            }
+          } catch (e) {
+            console.error('SSE parse error', e)
+          }
+        }
+      })
+
+      const decoder = new TextDecoder()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        parser.feed(decoder.decode(value))
+      }
+
+      // If status wasn't set by events, mark as success
+      setWfStatus(prev => prev === 'running' ? 'success' : prev)
     } catch {
       message.error('工作流执行失败')
+      setWfStatus('failed')
     } finally {
       setIsLoading(false)
     }
   }
+
+  const handleClearWorkflow = () => {
+    setWorkflowResult(null)
+    setNodeStates({})
+    setWfStatus('idle')
+  }
+
+  const nodeStatusIcon = (status: string) => {
+    switch (status) {
+      case 'running':
+        return <LoadingOutlined spin style={{ color: 'var(--c-blue)' }} />
+      case 'success':
+        return <CheckCircleOutlined style={{ color: 'var(--c-green)' }} />
+      case 'failed':
+        return <CloseCircleOutlined style={{ color: '#dc2626' }} />
+      case 'skipped':
+        return <MinusCircleOutlined style={{ color: 'var(--c-text-tertiary)' }} />
+      default:
+        return <LoadingOutlined style={{ color: 'var(--c-text-tertiary)' }} />
+    }
+  }
+
+  const nodeStatusLabel = (status: string) => {
+    switch (status) {
+      case 'running': return '执行中'
+      case 'success': return '成功'
+      case 'failed': return '失败'
+      case 'skipped': return '已跳过'
+      default: return status
+    }
+  }
+
+  const nodeExecList = Object.values(nodeStates)
 
   return (
     <div className="debug-page">
@@ -335,6 +437,7 @@ const Debug: React.FC = () => {
       {/* ===== Workflow panel ===== */}
       {activeTab === 'workflow' && (
         <div className="debug-workflow-card">
+          {/* Controls */}
           <div className="debug-wf-controls">
             <Select
               placeholder="选择应用"
@@ -367,24 +470,91 @@ const Debug: React.FC = () => {
             >
               执行工作流
             </Button>
+            {(nodeExecList.length > 0 || workflowResult) && !isLoading && (
+              <Button
+                icon={<ClearOutlined />}
+                onClick={handleClearWorkflow}
+              >
+                清除
+              </Button>
+            )}
           </div>
 
-          {workflowResult ? (
+          {/* Workflow inputs */}
+          <div className="debug-wf-inputs">
+            <label className="debug-wf-inputs-label">输入参数 (JSON)</label>
+            <Input.TextArea
+              value={workflowInputsText}
+              onChange={(e) => setWorkflowInputsText(e.target.value)}
+              placeholder='{"question": "你好"}'
+              autoSize={{ minRows: 2, maxRows: 5 }}
+              className="debug-wf-inputs-textarea"
+              disabled={isLoading}
+            />
+          </div>
+
+          {/* Execution status */}
+          {wfStatus !== 'idle' && (
+            <div className={`debug-wf-status debug-wf-status--${wfStatus}`}>
+              {wfStatus === 'running' && <LoadingOutlined spin />}
+              {wfStatus === 'success' && <CheckCircleOutlined />}
+              {wfStatus === 'failed' && <CloseCircleOutlined />}
+              <span>
+                {wfStatus === 'running' ? '执行中…' : wfStatus === 'success' ? '执行完成' : '执行失败'}
+              </span>
+            </div>
+          )}
+
+          {/* Node execution status cards */}
+          {nodeExecList.length > 0 && (
+            <div className="debug-wf-nodes">
+              <Divider orientation="left" style={{ fontSize: 12, color: 'var(--c-text-secondary)' }}>
+                节点执行详情 ({nodeExecList.length} 个节点)
+              </Divider>
+              <div className="debug-wf-node-list">
+                {nodeExecList.map((ns) => (
+                  <div key={ns.nodeId} className={`debug-wf-node-card debug-wf-node-card--${ns.status}`}>
+                    <div className="debug-wf-node-header">
+                      {nodeStatusIcon(ns.status)}
+                      <span className="debug-wf-node-id">{ns.nodeId}</span>
+                      <span className={`debug-wf-node-badge debug-wf-node-badge--${ns.status}`}>
+                        {nodeStatusLabel(ns.status)}
+                      </span>
+                    </div>
+                    {ns.output && (
+                      <pre className="debug-wf-node-output">
+                        {typeof ns.output === 'string' ? ns.output : JSON.stringify(ns.output, null, 2)}
+                      </pre>
+                    )}
+                    {ns.error && (
+                      <div className="debug-wf-node-error">{ns.error}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Final result */}
+          {workflowResult && (
             <div className="debug-wf-result">
               <Divider orientation="left" style={{ fontSize: 12, color: 'var(--c-text-secondary)' }}>
-                执行结果
+                最终输出
               </Divider>
               <pre className="debug-wf-pre">
                 {JSON.stringify(workflowResult, null, 2)}
               </pre>
             </div>
-          ) : (
+          )}
+
+          {/* Empty state */}
+          {wfStatus === 'idle' && nodeExecList.length === 0 && !workflowResult && (
             <div className="debug-wf-empty">
               <Empty
                 image={<PlayCircleOutlined style={{ fontSize: 36, color: 'var(--c-green)', opacity: 0.4 }} />}
                 description={
                   <span style={{ color: 'var(--c-text-secondary)', fontSize: 13 }}>
-                    选择应用和工作流后点击执行，结果将在这里显示
+                    选择应用和工作流后点击执行，实时查看每个节点的执行状态
                   </span>
                 }
               />

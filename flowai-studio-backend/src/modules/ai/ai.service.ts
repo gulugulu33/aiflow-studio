@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/services/prisma.service';
 import { StreamRunDto, RunDto, ChatDto } from './dto/ai.dto';
 import { RAGService } from '../rag/services/rag.service';
+import { WorkflowExecutorService } from '../workflow/services/workflow-executor.service';
+import { Subject } from 'rxjs';
 import axios from 'axios';
 
 @Injectable()
@@ -12,35 +14,127 @@ export class AiService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private ragService: RAGService,
+    @Inject(forwardRef(() => WorkflowExecutorService))
+    private workflowExecutor: WorkflowExecutorService,
   ) {}
 
+  /**
+   * Non-streaming workflow run:
+   * 1. Find the workflow by appId (or use explicit workflowId)
+   * 2. Execute the workflow
+   * 3. Return the final context
+   */
   async run(userId: string, runDto: RunDto) {
-    // TODO: 实现非流式工作流运行逻辑
+    const workflowId = await this.resolveWorkflowId(userId, runDto.appId, runDto.workflowId);
+
+    const result = await this.workflowExecutor.executeWorkflow(workflowId, {
+      inputs: runDto.inputs as Record<string, any>,
+      sessionId: runDto.sessionId,
+    });
+
+    // Extract output node result if present
+    const outputResult = this.extractOutputFromContext(result);
+
     return {
       success: true,
-      message: 'Run completed',
-      data: null,
+      message: 'Workflow execution completed',
+      data: {
+        output: outputResult,
+        context: result,
+      },
     };
   }
 
+  /**
+   * Streaming workflow run via SSE:
+   * Pushes real-time node execution status events to the client.
+   */
   async streamRun(userId: string, streamRunDto: StreamRunDto, res: Response) {
-    // 设置SSE响应头
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
     try {
-      // TODO: 实现流式工作流运行逻辑
-      res.write(`data: ${JSON.stringify({ type: 'start', message: 'Stream started' })}\n\n`);
-      
-      // 模拟流式输出
-      res.write(`data: ${JSON.stringify({ type: 'complete', message: 'Stream completed' })}\n\n`);
-      
-      res.end();
+      const workflowId = await this.resolveWorkflowId(userId, streamRunDto.appId, streamRunDto.workflowId);
+
+      const sseSubject = new Subject<any>();
+
+      sseSubject.subscribe({
+        next: (event) => {
+          res.write(`data: ${JSON.stringify(event)}\n\n`);
+        },
+        complete: () => {
+          res.end();
+        },
+        error: (err) => {
+          res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
+          res.end();
+        },
+      });
+
+      await this.workflowExecutor.executeWorkflow(workflowId, {
+        inputs: streamRunDto.inputs as Record<string, any>,
+        sessionId: streamRunDto.sessionId,
+      }, sseSubject);
+
+      sseSubject.complete();
     } catch (error) {
       res.write(`data: ${JSON.stringify({ type: 'error', message: error instanceof Error ? error.message : 'Unknown error' })}\n\n`);
       res.end();
     }
+  }
+
+  /**
+   * Resolve workflowId: use explicit workflowId if provided,
+   * otherwise find the latest workflow for the given appId.
+   */
+  private async resolveWorkflowId(userId: string, appId: string, workflowId?: string): Promise<string> {
+    if (workflowId) {
+      return workflowId;
+    }
+
+    // Validate app ownership
+    const app = await this.prisma.application.findUnique({
+      where: { id: appId },
+    });
+
+    if (!app) {
+      throw new Error('Application not found');
+    }
+
+    if (app.userId !== userId) {
+      throw new Error('You do not have permission to run this application');
+    }
+
+    // Find the latest workflow for this app
+    const workflow = await this.prisma.workflow.findFirst({
+      where: { applicationId: appId },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true },
+    });
+
+    if (!workflow) {
+      throw new Error('No workflow found for this application. Please create a workflow first.');
+    }
+
+    return workflow.id;
+  }
+
+  /**
+   * Extract the output from the execution context.
+   * Looks for output node results, or returns the last node's result.
+   */
+  private extractOutputFromContext(context: Record<string, any>): any {
+    // Try to find an output node result (key pattern: node with result property)
+    for (const [, value] of Object.entries(context)) {
+      if (value && typeof value === 'object' && 'result' in value) {
+        // Return the last result found
+        continue;
+      }
+    }
+
+    // Return the whole context if no specific output found
+    return context;
   }
 
   async chat(userId: string, chatDto: ChatDto, res: Response) {
@@ -53,7 +147,7 @@ export class AiService {
       const apiKey = this.configService.get<string>('QWEN_API_KEY');
       const baseUrl = this.configService.get<string>('QWEN_BASE_URL');
 
-      // 1. 保存用户消息
+      // 1. Save user message
       await this.prisma.chatHistory.create({
         data: {
           sessionId,
@@ -66,13 +160,13 @@ export class AiService {
       let context = '';
       let references: any[] = [];
 
-      // 2. RAG 检索
+      // 2. RAG retrieval
       if (knowledgeBaseId) {
         references = await this.ragService.retrieve(message, knowledgeBaseId, 5);
         context = references.map((ref: any) => ref.content).join('\n\n');
       }
 
-      // 3. 构建消息
+      // 3. Build messages
       const messages = [];
       if (context) {
         messages.push({ 
@@ -83,7 +177,7 @@ export class AiService {
       messages.push(...history);
       messages.push({ role: 'user', content: message });
 
-      // 4. 调用 Qwen SSE
+      // 4. Call Qwen SSE
       const response = await axios.post(
         `${baseUrl}/chat/completions`,
         {
@@ -115,14 +209,14 @@ export class AiService {
                 res.write(`data: ${JSON.stringify({ type: 'text', content })}\n\n`);
               }
             } catch (e) {
-              // 忽略解析错误
+              // Ignore parse errors
             }
           }
         }
       });
 
       response.data.on('end', async () => {
-        // 保存助手响应
+        // Save assistant response
         await this.prisma.chatHistory.create({
           data: {
             sessionId,

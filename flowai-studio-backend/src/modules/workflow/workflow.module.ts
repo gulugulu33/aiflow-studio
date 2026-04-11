@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { WorkflowController } from './workflow.controller';
 import { WorkflowService } from './workflow.service';
 import { WorkflowExecutorService } from './services/workflow-executor.service';
@@ -14,16 +14,14 @@ import { PrismaModule } from '../../common/modules/prisma.module';
 import { RAGModule } from '../rag/rag.module';
 import { SkillModule } from '../skill/skill.module';
 import { AiModule } from '../ai/ai.module';
-import { TopologicalSorter } from './utils/topological-sorter';
 
 @Module({
-  imports: [PrismaModule, RAGModule, SkillModule, AiModule],
+  imports: [PrismaModule, RAGModule, SkillModule, forwardRef(() => AiModule)],
   controllers: [WorkflowController],
   providers: [
     WorkflowService,
     WorkflowExecutorService,
     NodeExecutorFactory,
-    TopologicalSorter,
     StartNodeExecutor,
     UserInputNodeExecutor,
     LLMNodeExecutor,
