@@ -1,110 +1,70 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { SkillService } from './services/skill.service';
 import { CreateSkillDto } from './dto/create-skill.dto';
 import { UpdateSkillDto } from './dto/update-skill.dto';
-import { ApiResponse } from '../../common/types/api-response.type';
 
 @Controller('skill')
+@UseGuards(JwtAuthGuard)
 export class SkillController {
   constructor(private skillService: SkillService) {}
 
+  // 获取内置工具列表（必须在 :id 路由之前，否则 "builtin" 会被当作 id）
+  @Get('builtin/list')
+  getBuiltinSkills() {
+    return this.skillService.getBuiltinSkills();
+  }
+
   // 创建工具
-  @UseGuards(JwtAuthGuard)
   @Post()
-  async createSkill(
-    @Req() req: any,
+  createSkill(
+    @CurrentUser('userId') userId: string,
     @Body() createSkillDto: CreateSkillDto,
-  ): Promise<ApiResponse<any>> {
-    const skill = await this.skillService.createSkill(req.user.id, createSkillDto);
-    return {
-      success: true,
-      message: 'Skill created successfully',
-      data: skill,
-    };
+  ) {
+    return this.skillService.createSkill(userId, createSkillDto);
   }
 
   // 获取用户的所有工具
-  @UseGuards(JwtAuthGuard)
   @Get()
-  async findSkills(@Req() req: any): Promise<ApiResponse<any[]>> {
-    const skills = await this.skillService.findSkills(req.user.id);
-    return {
-      success: true,
-      message: 'Skills fetched successfully',
-      data: skills,
-    };
+  findSkills(@CurrentUser('userId') userId: string) {
+    return this.skillService.findSkills(userId);
   }
 
   // 获取工具详情
-  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  async findSkillById(
-    @Req() req: any,
+  findSkillById(
+    @CurrentUser('userId') userId: string,
     @Param('id') id: string,
-  ): Promise<ApiResponse<any>> {
-    const skill = await this.skillService.findSkillById(req.user.id, id);
-    return {
-      success: true,
-      message: 'Skill fetched successfully',
-      data: skill,
-    };
+  ) {
+    return this.skillService.findSkillById(userId, id);
   }
 
   // 更新工具
-  @UseGuards(JwtAuthGuard)
   @Put(':id')
-  async updateSkill(
-    @Req() req: any,
+  updateSkill(
+    @CurrentUser('userId') userId: string,
     @Param('id') id: string,
     @Body() updateSkillDto: UpdateSkillDto,
-  ): Promise<ApiResponse<any>> {
-    const skill = await this.skillService.updateSkill(req.user.id, id, updateSkillDto);
-    return {
-      success: true,
-      message: 'Skill updated successfully',
-      data: skill,
-    };
+  ) {
+    return this.skillService.updateSkill(userId, id, updateSkillDto);
   }
 
   // 删除工具
-  @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  async deleteSkill(
-    @Req() req: any,
+  deleteSkill(
+    @CurrentUser('userId') userId: string,
     @Param('id') id: string,
-  ): Promise<ApiResponse<any>> {
-    await this.skillService.deleteSkill(req.user.id, id);
-    return {
-      success: true,
-      message: 'Skill deleted successfully',
-    };
+  ) {
+    return this.skillService.deleteSkill(userId, id);
   }
 
   // 执行工具
-  @UseGuards(JwtAuthGuard)
   @Post(':id/execute')
-  async executeSkill(
+  executeSkill(
     @Param('id') id: string,
     @Body('params') params: Record<string, any>,
-  ): Promise<ApiResponse<any>> {
-    const result = await this.skillService.executeSkill(id, params);
-    return {
-      success: true,
-      message: 'Skill executed successfully',
-      data: result,
-    };
-  }
-
-  // 获取内置工具列表
-  @UseGuards(JwtAuthGuard)
-  @Get('builtin/list')
-  async getBuiltinSkills(): Promise<ApiResponse<any[]>> {
-    const skills = await this.skillService.getBuiltinSkills();
-    return {
-      success: true,
-      message: 'Builtin skills fetched successfully',
-      data: skills,
-    };
+  ) {
+    return this.skillService.executeSkill(id, params);
   }
 }
