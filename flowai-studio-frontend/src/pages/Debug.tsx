@@ -149,6 +149,10 @@ const Debug: React.FC = () => {
               ])
               setIsStreaming(false)
               setStreamingContent('')
+            } else if (data.type === 'error') {
+              message.error(data.message || '对话出错')
+              setIsStreaming(false)
+              setStreamingContent('')
             }
           } catch (e) {
             console.error('SSE parse error', e)
@@ -162,6 +166,21 @@ const Debug: React.FC = () => {
         if (done) break
         parser.feed(decoder.decode(value))
       }
+
+      // 流结束但没收到 done 事件：把已有内容保存为消息
+      if (isStreaming && accumulatedContent) {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: assistantMessageId,
+            role: 'assistant',
+            content: accumulatedContent,
+            createdAt: new Date().toISOString(),
+          },
+        ])
+      }
+      setIsStreaming(false)
+      setStreamingContent('')
     } catch {
       message.error('发送消息失败')
       setIsStreaming(false)

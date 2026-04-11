@@ -147,57 +147,53 @@ export class AiService {
       const apiKey = this.configService.get<string>('QWEN_API_KEY');
       const baseUrl = this.configService.get<string>('QWEN_BASE_URL');
 
-      // 1. Save user message
-      await this.prisma.chatHistory.create({
-        data: {
-          sessionId,
-          role: 'user',
-          content: message,
-          userId,
-        },
-      });
+      // 1. 保存用户消息（非阻塞，失败不影响对话）
+      this.prisma.chatHistory.create({
+        data: { sessionId, role: 'user', content: message, userId },
+      }).catch((e) => console.error('保存用户消息失败:', e.message));
 
       let context = '';
       let references: any[] = [];
 
-      // 2. RAG retrieval
+      // 2. RAG 检索（失败时降级为无知识库模式）
       if (knowledgeBaseId) {
-        references = await this.ragService.retrieve(message, knowledgeBaseId, 5);
-        context = references.map((ref: any) => ref.content).join('\n\n');
+        try {
+          references = await this.ragService.retrieve(message, knowledgeBaseId, 5);
+          context = references.map((ref: any) => ref.content).join('\n\n');
+        } catch (ragError) {
+          console.error('RAG 检索失败，降级为普通对话:', ragError.message);
+        }
       }
 
-      // 3. Build messages
+      // 3. 构建消息
       const messages = [];
       if (context) {
-        messages.push({ 
-          role: 'system', 
-          content: `你是一个基于知识库回答问题的助手。请参考以下内容回答：\n\n${context}` 
+        messages.push({
+          role: 'system',
+          content: `你是一个基于知识库回答问题的助手。请参考以下内容回答：\n\n${context}`,
         });
       }
       messages.push(...history);
       messages.push({ role: 'user', content: message });
 
-      // 4. Call Qwen SSE
+      // 4. 调用 Qwen 流式 API
       const response = await axios.post(
         `${baseUrl}/chat/completions`,
-        {
-          model: 'qwen-turbo',
-          messages,
-          stream: true,
-        },
+        { model: 'qwen-turbo', messages, stream: true },
         {
           headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
           responseType: 'stream',
-        }
+          timeout: 30000,
+        },
       );
 
       let fullAssistantContent = '';
 
       response.data.on('data', (chunk: Buffer) => {
-        const lines = chunk.toString().split('\n').filter(line => line.trim() !== '');
+        const lines = chunk.toString().split('\n').filter((line) => line.trim() !== '');
         for (const line of lines) {
           if (line.includes('[DONE]')) continue;
           if (line.startsWith('data: ')) {
@@ -208,16 +204,16 @@ export class AiService {
                 fullAssistantContent += content;
                 res.write(`data: ${JSON.stringify({ type: 'text', content })}\n\n`);
               }
-            } catch (e) {
-              // Ignore parse errors
+            } catch {
+              // 忽略解析错误
             }
           }
         }
       });
 
       response.data.on('end', async () => {
-        // Save assistant response
-        await this.prisma.chatHistory.create({
+        // 保存助手回复（非阻塞）
+        this.prisma.chatHistory.create({
           data: {
             sessionId,
             role: 'assistant',
@@ -225,14 +221,23 @@ export class AiService {
             userId,
             references: JSON.stringify(references),
           },
-        });
+        }).catch((e) => console.error('保存助手消息失败:', e.message));
+
         res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+        res.end();
+      });
+
+      response.data.on('error', (err: Error) => {
+        console.error('Qwen 流式响应错误:', err.message);
+        const safeMsg = (err.message || '流式响应异常').replace(/[\n\r]/g, ' ');
+        res.write(`data: ${JSON.stringify({ type: 'error', message: safeMsg })}\n\n`);
         res.end();
       });
 
     } catch (error) {
       console.error('Chat error:', error);
-      res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+      const safeMsg = (error instanceof Error ? error.message : 'Unknown error').replace(/[\n\r]/g, ' ');
+      res.write(`data: ${JSON.stringify({ type: 'error', message: safeMsg })}\n\n`);
       res.end();
     }
   }
