@@ -111,11 +111,11 @@ export const createAppSlice: StateCreator<AppSlice> = (set, get) => ({
     set({ isLoading: true })
     try {
       const response = await request.patch(`/apps/${id}/publish`) as any
-      const updatedApp = response.data as Application
+      const partial = response.data || {}
       const currentApps = Array.isArray(get().apps) ? get().apps : []
       set({
-        apps: currentApps.map((app) => app.id === id ? updatedApp : app),
-        currentApp: get().currentApp?.id === id ? updatedApp : get().currentApp,
+        apps: currentApps.map((app) => app.id === id ? { ...app, ...partial } : app),
+        currentApp: get().currentApp?.id === id ? { ...get().currentApp!, ...partial } : get().currentApp,
         isLoading: false,
       })
     } catch (error) {
@@ -128,11 +128,11 @@ export const createAppSlice: StateCreator<AppSlice> = (set, get) => ({
     set({ isLoading: true })
     try {
       const response = await request.patch(`/apps/${id}/unpublish`) as any
-      const updatedApp = response.data as Application
+      const partial = response.data || {}
       const currentApps = Array.isArray(get().apps) ? get().apps : []
       set({
-        apps: currentApps.map((app) => app.id === id ? updatedApp : app),
-        currentApp: get().currentApp?.id === id ? updatedApp : get().currentApp,
+        apps: currentApps.map((app) => app.id === id ? { ...app, ...partial } : app),
+        currentApp: get().currentApp?.id === id ? { ...get().currentApp!, ...partial } : get().currentApp,
         isLoading: false,
       })
     } catch (error) {
@@ -145,11 +145,11 @@ export const createAppSlice: StateCreator<AppSlice> = (set, get) => ({
     set({ isLoading: true })
     try {
       const response = await request.patch(`/apps/${id}/archive`) as any
-      const updatedApp = response.data as Application
+      const partial = response.data || {}
       const currentApps = Array.isArray(get().apps) ? get().apps : []
       set({
-        apps: currentApps.map((app) => app.id === id ? updatedApp : app),
-        currentApp: get().currentApp?.id === id ? updatedApp : get().currentApp,
+        apps: currentApps.map((app) => app.id === id ? { ...app, ...partial } : app),
+        currentApp: get().currentApp?.id === id ? { ...get().currentApp!, ...partial } : get().currentApp,
         isLoading: false,
       })
     } catch (error) {
@@ -162,11 +162,11 @@ export const createAppSlice: StateCreator<AppSlice> = (set, get) => ({
     set({ isLoading: true })
     try {
       const response = await request.patch(`/apps/${id}/unarchive`) as any
-      const updatedApp = response.data as Application
+      const partial = response.data || {}
       const currentApps = Array.isArray(get().apps) ? get().apps : []
       set({
-        apps: currentApps.map((app) => app.id === id ? updatedApp : app),
-        currentApp: get().currentApp?.id === id ? updatedApp : get().currentApp,
+        apps: currentApps.map((app) => app.id === id ? { ...app, ...partial } : app),
+        currentApp: get().currentApp?.id === id ? { ...get().currentApp!, ...partial } : get().currentApp,
         isLoading: false,
       })
     } catch (error) {

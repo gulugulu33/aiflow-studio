@@ -42,6 +42,8 @@ const Skill: React.FC = () => {
     config: { url: '', method: 'POST', headers: '' },
   })
   const [executionParams, setExecutionParams] = useState<Record<string, any>>({})
+  const [executionParamsText, setExecutionParamsText] = useState('{}')
+  const [jsonError, setJsonError] = useState('')
   const [builtinSkills, setBuiltinSkills] = useState<any[]>([])
   const [executionResult, setExecutionResult] = useState<any>(null)
 
@@ -149,14 +151,25 @@ const Skill: React.FC = () => {
   const handleExecuteSkill = (skill: any) => {
     setSelectedSkill(skill)
     setExecutionParams({})
+    setExecutionParamsText('{}')
+    setJsonError('')
     setExecutionResult(null)
     setExecutionModalVisible(true)
   }
 
   const handleRunExecution = async () => {
     if (!selectedSkill) return
+    // Re-parse from text to catch any errors
+    let parsedParams = executionParams
     try {
-      const result = await executeSkill(selectedSkill.id, executionParams)
+      parsedParams = JSON.parse(executionParamsText)
+      setJsonError('')
+    } catch {
+      setJsonError('JSON 格式错误，请检查输入')
+      return
+    }
+    try {
+      const result = await executeSkill(selectedSkill.id, parsedParams)
       setExecutionResult(result)
       message.success('工具执行成功')
     } catch {
@@ -348,14 +361,22 @@ const Skill: React.FC = () => {
           <div className="exec-section">
             <h4 className="exec-section-title">执行参数</h4>
             <TextArea
-              value={JSON.stringify(executionParams, null, 2)}
+              value={executionParamsText}
               onChange={(e) => {
-                try { setExecutionParams(JSON.parse(e.target.value)) } catch { /* ignore */ }
+                setExecutionParamsText(e.target.value)
+                try {
+                  JSON.parse(e.target.value)
+                  setJsonError('')
+                } catch {
+                  setJsonError('JSON 格式错误')
+                }
               }}
               placeholder='{"param1": "value1"}'
               rows={6}
               className="exec-textarea"
+              status={jsonError ? 'error' : undefined}
             />
+            {jsonError && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>{jsonError}</div>}
           </div>
 
           {executionResult && (

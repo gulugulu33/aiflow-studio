@@ -12,8 +12,8 @@ export interface SkillSlice {
   setIsLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   fetchSkills: () => Promise<void>
-  createSkill: (data: { name: string; description?: string; type: string; builtinType?: string; isActive?: boolean }) => Promise<Skill>
-  updateSkill: (id: string, data: { name?: string; description?: string; type?: string; builtinType?: string; isActive?: boolean }) => Promise<Skill>
+  createSkill: (data: { name: string; description?: string; type: string; builtinType?: string; isActive?: boolean; config?: Record<string, any> }) => Promise<Skill>
+  updateSkill: (id: string, data: { name?: string; description?: string; type?: string; builtinType?: string; isActive?: boolean; config?: Record<string, any> }) => Promise<Skill>
   deleteSkill: (id: string) => Promise<void>
   executeSkill: (skillId: string, params: Record<string, any>) => Promise<any>
   getBuiltinSkills: () => Promise<any[]>

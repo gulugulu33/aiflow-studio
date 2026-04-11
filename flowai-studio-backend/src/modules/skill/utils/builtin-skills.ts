@@ -43,6 +43,7 @@ async function executeHttpSkill(params: any): Promise<any> {
       method,
       headers,
       data: body,
+      timeout: 10000, // 10 秒超时
     });
 
     return {
