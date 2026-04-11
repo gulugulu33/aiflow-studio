@@ -44,8 +44,8 @@
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1",
     "uuid": "^13.0.0",
-    "zod": "^3.22.4",
-    "bcryptjs": "^2.4.3"
+    "vm2": "^3.10.5",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.3.0",

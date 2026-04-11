@@ -9,6 +9,8 @@ import {
   RocketOutlined,
   MoreOutlined,
   ArrowRightOutlined,
+  InboxOutlined,
+  UndoOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
@@ -22,6 +24,7 @@ const AppList: React.FC = () => {
   const navigate = useNavigate()
   const {
     apps, isLoading, fetchApps, createApp, updateApp, deleteApp, publishApp, unpublishApp,
+    archiveApp, unarchiveApp,
     createWorkflow,
   } = useStore()
 
@@ -30,18 +33,16 @@ const AppList: React.FC = () => {
   const [currentApp, setCurrentApp] = useState<Application | null>(null)
   const [form] = Form.useForm()
   const [searchText, setSearchText] = useState('')
-  const initDone = useRef(false) // 防止 StrictMode 重复执行
+  const initDone = useRef(false)
 
   useEffect(() => {
     if (initDone.current) return
     initDone.current = true
 
     const initAppList = async () => {
-      // 1. 先拉取应用列表
       const fetchedApps = await fetchApps()
       const safeApps = Array.isArray(fetchedApps) ? fetchedApps : []
 
-      // 2. 列表为空时自动创建示例应用
       if (safeApps.length === 0) {
         try {
           const demoApp = await createApp({
@@ -101,7 +102,6 @@ const AppList: React.FC = () => {
   }
 
   const handleDelete = async (id: string, e?: any) => {
-    // 阻止事件冒泡，防止触发卡片的 onClick 跳转到编辑器
     e?.domEvent?.stopPropagation?.()
     try {
       await deleteApp(id)
@@ -115,19 +115,11 @@ const AppList: React.FC = () => {
     navigate(`/apps/${appId}/editor`)
   }
 
-  const getCardMenu = (app: Application) => ({
-    items: [
-      {
-        key: 'edit',
-        label: '编辑信息',
-        icon: <EditOutlined />,
-        onClick: (e: any) => {
-          e?.domEvent?.stopPropagation?.()
-          handleEdit(app)
-        },
-      },
-      app.status === 'draft'
-        ? {
+  const getStatusAction = (app: Application) => {
+    switch (app.status) {
+      case 'draft':
+        return [
+          {
             key: 'publish',
             label: '发布',
             onClick: async (e: any) => {
@@ -139,9 +131,25 @@ const AppList: React.FC = () => {
                 message.error('发布失败')
               }
             },
-          }
-        : app.status === 'published'
-        ? {
+          },
+          {
+            key: 'archive',
+            label: '归档',
+            icon: <InboxOutlined />,
+            onClick: async (e: any) => {
+              e?.domEvent?.stopPropagation?.()
+              try {
+                await archiveApp(app.id)
+                message.success('应用已归档')
+              } catch {
+                message.error('归档失败')
+              }
+            },
+          },
+        ]
+      case 'published':
+        return [
+          {
             key: 'unpublish',
             label: '下线',
             onClick: async (e: any) => {
@@ -153,8 +161,56 @@ const AppList: React.FC = () => {
                 message.error('下线失败')
               }
             },
-          }
-        : null,
+          },
+          {
+            key: 'archive',
+            label: '归档',
+            icon: <InboxOutlined />,
+            onClick: async (e: any) => {
+              e?.domEvent?.stopPropagation?.()
+              try {
+                await archiveApp(app.id)
+                message.success('应用已归档')
+              } catch {
+                message.error('归档失败')
+              }
+            },
+          },
+        ]
+      case 'archived':
+        return [
+          {
+            key: 'unarchive',
+            label: '取消归档',
+            icon: <UndoOutlined />,
+            onClick: async (e: any) => {
+              e?.domEvent?.stopPropagation?.()
+              try {
+                await unarchiveApp(app.id)
+                message.success('应用已恢复为草稿')
+              } catch {
+                message.error('取消归档失败')
+              }
+            },
+          },
+        ]
+      default:
+        return []
+    }
+  }
+
+  const getCardMenu = (app: Application) => ({
+    items: [
+      {
+        key: 'edit',
+        label: '编辑信息',
+        icon: <EditOutlined />,
+        onClick: (e: any) => {
+          e?.domEvent?.stopPropagation?.()
+          handleEdit(app)
+        },
+      },
+      ...getStatusAction(app),
       { type: 'divider' as const },
       {
         key: 'delete',
@@ -202,7 +258,6 @@ const AppList: React.FC = () => {
         </div>
       ) : filteredApps.length > 0 ? (
         <div className="app-card-grid">
-          {/* New app card */}
           <button className="app-card app-card--new" onClick={handleCreate}>
             <div className="app-card-new-icon">
               <PlusOutlined />
@@ -218,7 +273,6 @@ const AppList: React.FC = () => {
                 className="app-card"
                 onClick={() => handleEnterEditor(app.id)}
               >
-                {/* Card header */}
                 <div className="app-card-header">
                   <div className="app-card-icon">
                     {app.icon ? (
@@ -241,7 +295,6 @@ const AppList: React.FC = () => {
                   </Dropdown>
                 </div>
 
-                {/* Card body */}
                 <div className="app-card-body">
                   <h3 className="app-card-name">{app.name}</h3>
                   <p className="app-card-desc">
@@ -249,7 +302,6 @@ const AppList: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Card footer */}
                 <div className="app-card-footer">
                   {status && (
                     <span className={`status-badge ${status.cls}`}>

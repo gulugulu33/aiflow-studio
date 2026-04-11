@@ -163,4 +163,52 @@ export class AppService {
       },
     });
   }
+
+  async archive(userId: string, id: string) {
+    const app = await this.prisma.application.findUnique({
+      where: { id },
+    });
+
+    if (!app) {
+      throw new NotFoundException('Application not found');
+    }
+
+    if (app.userId !== userId) {
+      throw new ForbiddenException('You do not have permission to archive this application');
+    }
+
+    return this.prisma.application.update({
+      where: { id },
+      data: { status: 'archived' },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+      },
+    });
+  }
+
+  async unarchive(userId: string, id: string) {
+    const app = await this.prisma.application.findUnique({
+      where: { id },
+    });
+
+    if (!app) {
+      throw new NotFoundException('Application not found');
+    }
+
+    if (app.userId !== userId) {
+      throw new ForbiddenException('You do not have permission to unarchive this application');
+    }
+
+    return this.prisma.application.update({
+      where: { id },
+      data: { status: 'draft' },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+      },
+    });
+  }
 }

@@ -17,6 +17,8 @@ export interface AppSlice {
   deleteApp: (id: string) => Promise<void>
   publishApp: (id: string) => Promise<void>
   unpublishApp: (id: string) => Promise<void>
+  archiveApp: (id: string) => Promise<void>
+  unarchiveApp: (id: string) => Promise<void>
 }
 
 export const createAppSlice: StateCreator<AppSlice> = (set, get) => ({
@@ -126,6 +128,40 @@ export const createAppSlice: StateCreator<AppSlice> = (set, get) => ({
     set({ isLoading: true })
     try {
       const response = await request.patch(`/apps/${id}/unpublish`) as any
+      const updatedApp = response.data as Application
+      const currentApps = Array.isArray(get().apps) ? get().apps : []
+      set({
+        apps: currentApps.map((app) => app.id === id ? updatedApp : app),
+        currentApp: get().currentApp?.id === id ? updatedApp : get().currentApp,
+        isLoading: false,
+      })
+    } catch (error) {
+      set({ isLoading: false })
+      throw error
+    }
+  },
+
+  archiveApp: async (id) => {
+    set({ isLoading: true })
+    try {
+      const response = await request.patch(`/apps/${id}/archive`) as any
+      const updatedApp = response.data as Application
+      const currentApps = Array.isArray(get().apps) ? get().apps : []
+      set({
+        apps: currentApps.map((app) => app.id === id ? updatedApp : app),
+        currentApp: get().currentApp?.id === id ? updatedApp : get().currentApp,
+        isLoading: false,
+      })
+    } catch (error) {
+      set({ isLoading: false })
+      throw error
+    }
+  },
+
+  unarchiveApp: async (id) => {
+    set({ isLoading: true })
+    try {
+      const response = await request.patch(`/apps/${id}/unarchive`) as any
       const updatedApp = response.data as Application
       const currentApps = Array.isArray(get().apps) ? get().apps : []
       set({

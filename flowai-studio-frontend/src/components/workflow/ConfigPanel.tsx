@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useStore } from '../../store'
-import { Form, Input, Select, Slider, Typography, Empty } from 'antd'
+import { Form, Input, InputNumber, Select, Slider, Typography, Empty } from 'antd'
 import './ConfigPanel.css'
 
 const { Text } = Typography
@@ -76,6 +76,9 @@ const ConfigPanel: React.FC = () => {
             </Form.Item>
             <Form.Item name="temperature" label="温度" initialValue={0.7}>
               <Slider min={0} max={1} step={0.1} />
+            </Form.Item>
+            <Form.Item name="maxTokens" label="最大 Token 数" initialValue={1024}>
+              <InputNumber min={1} max={8192} step={256} style={{ width: '100%' }} placeholder="生成内容的最大 Token 数" />
             </Form.Item>
           </>
         )
