@@ -12,7 +12,6 @@ import {
   CloseCircleOutlined,
   LoadingOutlined,
   MinusCircleOutlined,
-  StopOutlined,
   ClearOutlined,
 } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
@@ -55,6 +54,7 @@ const Debug: React.FC = () => {
   const [workflows, setWorkflows] = useState<any[]>([])
   const [selectedKbId, setSelectedKbId] = useState<string>('')
   const [workflowInputsText, setWorkflowInputsText] = useState('{}')
+  const [requiredInputFields, setRequiredInputFields] = useState<string[]>([])
   const [workflowResult, setWorkflowResult] = useState<any>(null)
   const [nodeStates, setNodeStates] = useState<Record<string, NodeExecState>>({})
   const [wfStatus, setWfStatus] = useState<'idle' | 'running' | 'success' | 'failed'>('idle')
@@ -77,6 +77,8 @@ const Debug: React.FC = () => {
     setSelectedAppId(appId)
     setSelectedWorkflowId('')
     setWorkflows([])
+    setWorkflowInputsText('{}')
+    setRequiredInputFields([])
     if (appId) {
       try {
         const response = await request.get(`/workflows/app/${appId}`) as any
@@ -84,6 +86,42 @@ const Debug: React.FC = () => {
       } catch {
         message.error('获取工作流失败')
       }
+    }
+  }
+
+  // 选择工作流时，获取详情并自动预填充 UserInput 节点所需的输入参数
+  const handleWorkflowChange = async (workflowId: string) => {
+    setSelectedWorkflowId(workflowId)
+    if (!workflowId) {
+      setWorkflowInputsText('{}')
+      setRequiredInputFields([])
+      return
+    }
+    try {
+      const response = await request.get(`/workflows/${workflowId}`) as any
+      const wfData = response.data || response
+      const nodes: any[] = Array.isArray(wfData.nodes) ? wfData.nodes : []
+      // 找出所有 UserInput 节点，提取 inputField 作为预填充的 key
+      const fields: string[] = []
+      const inputTemplate: Record<string, string> = {}
+      for (const node of nodes) {
+        if (node.type === 'userInput' && node.data?.inputField) {
+          const field = node.data.inputField
+          fields.push(field)
+          // 提供有意义的示例值，让用户知道需要填什么
+          inputTemplate[field] = `请输入${node.data.label || field}`
+        }
+      }
+      setRequiredInputFields(fields)
+      if (fields.length > 0) {
+        setWorkflowInputsText(JSON.stringify(inputTemplate, null, 2))
+      } else {
+        setWorkflowInputsText('{}')
+      }
+    } catch (err) {
+      console.error('获取工作流详情失败:', err)
+      setWorkflowInputsText('{}')
+      setRequiredInputFields([])
     }
   }
 
@@ -202,6 +240,15 @@ const Debug: React.FC = () => {
     } catch {
       message.error('输入参数 JSON 格式错误')
       return
+    }
+
+    // 校验必填输入字段
+    if (requiredInputFields.length > 0) {
+      const missing = requiredInputFields.filter(f => !inputs[f] || (typeof inputs[f] === 'string' && inputs[f].trim() === ''))
+      if (missing.length > 0) {
+        message.error(`请填写必填参数：${missing.join(', ')}`)
+        return
+      }
     }
 
     setIsLoading(true)
@@ -486,7 +533,7 @@ const Debug: React.FC = () => {
             </Select>
             <Select
               placeholder="选择工作流"
-              onChange={setSelectedWorkflowId}
+              onChange={handleWorkflowChange}
               value={selectedWorkflowId || undefined}
               disabled={!selectedAppId}
               style={{ width: 220 }}
@@ -517,7 +564,14 @@ const Debug: React.FC = () => {
 
           {/* 工作流输入参数 */}
           <div className="debug-wf-inputs">
-            <label className="debug-wf-inputs-label">输入参数 (JSON)</label>
+            <label className="debug-wf-inputs-label">
+              输入参数 (JSON)
+              {requiredInputFields.length > 0 && (
+                <span style={{ color: '#dc2626', fontSize: 12, marginLeft: 8, fontWeight: 'normal' }}>
+                  * 必填字段：{requiredInputFields.join(', ')}
+                </span>
+              )}
+            </label>
             <Input.TextArea
               value={workflowInputsText}
               onChange={(e) => setWorkflowInputsText(e.target.value)}
