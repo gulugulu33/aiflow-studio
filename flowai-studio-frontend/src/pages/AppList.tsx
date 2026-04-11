@@ -30,38 +30,38 @@ const AppList: React.FC = () => {
   const [currentApp, setCurrentApp] = useState<Application | null>(null)
   const [form] = Form.useForm()
   const [searchText, setSearchText] = useState('')
-  const demoCreating = useRef(false) // 防止重复创建示例应用
+  const initDone = useRef(false) // 防止 StrictMode 重复执行
 
   useEffect(() => {
-    fetchApps()
-  }, [])
+    if (initDone.current) return
+    initDone.current = true
 
-  // 应用列表为空时，自动创建示例应用（仅执行一次）
-  useEffect(() => {
-    const maybeCreateDemo = async () => {
-      const safeApps = Array.isArray(apps) ? apps : []
-      if (isLoading || safeApps.length > 0 || demoCreating.current) return
-      demoCreating.current = true
-      try {
-        const demoApp = await createApp({
-          name: DEMO_APP_NAME,
-          description: '一个可直接运行的 AI 问答工作流，包含用户输入、大模型回答和条件分支。在调试面板输入 {"question": "你的问题"} 即可运行。',
-        })
-        // 一步创建工作流 + 节点，后端 create 接口支持同时传入 nodes/edges
-        await createWorkflow(demoApp.id, {
-          name: '示例工作流 — AI 智能问答',
-          description: '用户输入 → 大模型回答 → 条件分支 → 输出',
-          nodes: DEMO_NODES as any,
-          edges: DEMO_EDGES as any,
-        })
-        message.success('已为你创建示例应用，点击查看完整工作流 🎉')
-      } catch {
-        // 创建示例失败不影响用户使用
-        console.warn('示例应用创建失败')
+    const initAppList = async () => {
+      // 1. 先拉取应用列表
+      const fetchedApps = await fetchApps()
+      const safeApps = Array.isArray(fetchedApps) ? fetchedApps : []
+
+      // 2. 列表为空时自动创建示例应用
+      if (safeApps.length === 0) {
+        try {
+          const demoApp = await createApp({
+            name: DEMO_APP_NAME,
+            description: '一个可直接运行的 AI 问答工作流，包含用户输入、大模型回答和条件分支。在调试面板输入 {"question": "你的问题"} 即可运行。',
+          })
+          await createWorkflow(demoApp.id, {
+            name: '示例工作流 — AI 智能问答',
+            description: '用户输入 → 大模型回答 → 条件分支 → 输出',
+            nodes: DEMO_NODES as any,
+            edges: DEMO_EDGES as any,
+          })
+          message.success('已为你创建示例应用，点击查看完整工作流 🎉')
+        } catch {
+          console.warn('示例应用创建失败')
+        }
       }
     }
-    maybeCreateDemo()
-  }, [apps, isLoading])
+    initAppList()
+  }, [])
 
   const filteredApps = Array.isArray(apps)
     ? apps.filter(
