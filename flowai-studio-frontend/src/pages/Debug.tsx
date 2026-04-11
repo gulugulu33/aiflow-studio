@@ -86,9 +86,15 @@ const Debug: React.FC = () => {
   }
 
   const handleSendMessage = async () => {
-    if (!input.trim() || isStreaming) return
+    const trimmed = input.trim()
+    if (!trimmed || isStreaming) return
 
-    const currentInput = input
+    // Immediately clear input and set streaming state
+    const currentInput = trimmed
+    setInput('')
+    setIsStreaming(true)
+    setStreamingContent('')
+
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -97,9 +103,6 @@ const Debug: React.FC = () => {
     }
 
     setMessages(prev => [...prev, userMessage])
-    setInput('')
-    setIsStreaming(true)
-    setStreamingContent('')
 
     const assistantMessageId = Date.now().toString() + '-assistant'
 
@@ -113,7 +116,7 @@ const Debug: React.FC = () => {
         body: JSON.stringify({
           message: currentInput,
           history: messages.map(msg => ({ role: msg.role, content: msg.content })),
-          knowledgeBaseId: selectedKbId,
+          ...(selectedKbId ? { knowledgeBaseId: selectedKbId } : {}),
         }),
       })
 
