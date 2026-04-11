@@ -1,5 +1,5 @@
 /* ============================================================
-   Design Tokens — Dify/Coze-like light theme
+   Design Tokens — AiFlow Studio light theme
    ============================================================ */
 :root {
   --c-bg: #f7f8fa;
@@ -11,7 +11,7 @@
   --c-text-primary: #1c2433;
   --c-text-secondary: #6b7a99;
   --c-text-tertiary: #a0adc0;
-  --c-accent: #7c3aed;          /* purple — Dify primary */
+  --c-accent: #7c3aed;          /* purple — AiFlow primary */
   --c-accent-light: #f3effe;
   --c-accent-hover: #6d28d9;
   --c-green: #059669;
