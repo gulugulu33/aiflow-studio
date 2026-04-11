@@ -46,6 +46,7 @@ interface NodeExecState {
 const Debug: React.FC = () => {
   const { isLoading, setIsLoading, apps, fetchApps, knowledgeBases, fetchKnowledgeBases } = useStore()
   const [input, setInput] = useState('')
+  const isComposingRef = useRef(false) // 标记是否在输入法组合状态
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [activeTab, setActiveTab] = useState<'chat' | 'workflow'>('chat')
   const [selectedAppId, setSelectedAppId] = useState<string>('')
@@ -89,7 +90,7 @@ const Debug: React.FC = () => {
     const trimmed = input.trim()
     if (!trimmed || isStreaming) return
 
-    // Immediately clear input and set streaming state
+    // 立即清空输入框并设置流式状态
     const currentInput = trimmed
     setInput('')
     setIsStreaming(true)
@@ -167,7 +168,7 @@ const Debug: React.FC = () => {
         parser.feed(decoder.decode(value))
       }
 
-      // 流结束但没收到 done 事件：把已有内容保存为消息
+      // 流结束但没收到 done 事件：将已有内容保存为消息
       if (isStreaming && accumulatedContent) {
         setMessages(prev => [
           ...prev,
@@ -297,7 +298,7 @@ const Debug: React.FC = () => {
 
   return (
     <div className="debug-page">
-      {/* Page header */}
+      {/* 页面头部 */}
       <div className="debug-page-header">
         <div>
           <h2 className="debug-page-title">调试中心</h2>
@@ -315,7 +316,7 @@ const Debug: React.FC = () => {
         </div>
       </div>
 
-      {/* Tab bar */}
+      {/* 标签栏 */}
       <div className="debug-tab-bar">
         <button
           className={`debug-tab ${activeTab === 'chat' ? 'debug-tab--active' : ''}`}
@@ -333,10 +334,10 @@ const Debug: React.FC = () => {
         </button>
       </div>
 
-      {/* ===== Chat panel ===== */}
+      {/* ===== 对话面板 ===== */}
       {activeTab === 'chat' && (
         <div className="debug-chat-card">
-          {/* Messages */}
+          {/* 消息列表 */}
           <div className="debug-messages">
             {messages.length === 0 && !streamingContent ? (
               <div className="debug-empty">
@@ -413,7 +414,7 @@ const Debug: React.FC = () => {
             )}
           </div>
 
-          {/* Input area */}
+          {/* 输入区域 */}
           <div className="debug-input-area">
             <Select
               placeholder="关联知识库（可选）"
@@ -434,8 +435,11 @@ const Debug: React.FC = () => {
                 placeholder="输入消息，Shift+Enter 换行，Enter 发送"
                 autoSize={{ minRows: 2, maxRows: 5 }}
                 className="debug-textarea"
-                onPressEnter={(e) => {
-                  if (!e.shiftKey) {
+                onCompositionStart={() => { isComposingRef.current = true }}
+                onCompositionEnd={() => { isComposingRef.current = false }}
+                onKeyDown={(e) => {
+                  // 输入法组合中按回车是选字，不发送
+                  if (e.key === 'Enter' && !e.shiftKey && !isComposingRef.current && !e.nativeEvent.isComposing) {
                     e.preventDefault()
                     handleSendMessage()
                   }
@@ -456,10 +460,10 @@ const Debug: React.FC = () => {
         </div>
       )}
 
-      {/* ===== Workflow panel ===== */}
+      {/* ===== 工作流面板 ===== */}
       {activeTab === 'workflow' && (
         <div className="debug-workflow-card">
-          {/* Controls */}
+          {/* 控制栏 */}
           <div className="debug-wf-controls">
             <Select
               placeholder="选择应用"
@@ -502,7 +506,7 @@ const Debug: React.FC = () => {
             )}
           </div>
 
-          {/* Workflow inputs */}
+          {/* 工作流输入参数 */}
           <div className="debug-wf-inputs">
             <label className="debug-wf-inputs-label">输入参数 (JSON)</label>
             <Input.TextArea
@@ -515,7 +519,7 @@ const Debug: React.FC = () => {
             />
           </div>
 
-          {/* Execution status */}
+          {/* 执行状态 */}
           {wfStatus !== 'idle' && (
             <div className={`debug-wf-status debug-wf-status--${wfStatus}`}>
               {wfStatus === 'running' && <LoadingOutlined spin />}
@@ -527,7 +531,7 @@ const Debug: React.FC = () => {
             </div>
           )}
 
-          {/* Node execution status cards */}
+          {/* 节点执行状态卡片 */}
           {nodeExecList.length > 0 && (
             <div className="debug-wf-nodes">
               <Divider orientation="left" style={{ fontSize: 12, color: 'var(--c-text-secondary)' }}>
@@ -557,7 +561,7 @@ const Debug: React.FC = () => {
             </div>
           )}
 
-          {/* Final result */}
+          {/* 最终结果 */}
           {workflowResult && (
             <div className="debug-wf-result">
               <Divider orientation="left" style={{ fontSize: 12, color: 'var(--c-text-secondary)' }}>
@@ -569,7 +573,7 @@ const Debug: React.FC = () => {
             </div>
           )}
 
-          {/* Empty state */}
+          {/* 空状态 */}
           {wfStatus === 'idle' && nodeExecList.length === 0 && !workflowResult && (
             <div className="debug-wf-empty">
               <Empty
