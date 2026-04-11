@@ -131,3 +131,14 @@ curl -s -X POST http://localhost:3000/api/rag/retrieve \
 
 ## 开源协议
 小圆项目，禁止商业用途。
+<img width="1612" height="961" alt="image" src="https://github.com/user-attachments/assets/c58798f9-96f5-4415-968a-70e99a96e595" />
+<img width="1612" height="961" alt="image" src="https://github.com/user-attachments/assets/bb0d912c-44a1-48ef-a25c-fb4a7560b1d8" />
+<img width="1612" height="961" alt="image" src="https://github.com/user-attachments/assets/85ba1bc0-f2a7-4981-9a98-af057cf949f6" />
+<img width="1612" height="961" alt="image" src="https://github.com/user-attachments/assets/a40c8ba6-ac10-4fb9-890f-b0a5758e4a37" />
+<img width="1612" height="961" alt="image" src="https://github.com/user-attachments/assets/d457aff7-cfa4-4f81-aac8-f5496c36994f" />
+<img width="1612" height="961" alt="image" src="https://github.com/user-attachments/assets/c10a3711-c73a-4ca9-af23-28f9bf225a3b" />
+<img width="1612" height="961" alt="image" src="https://github.com/user-attachments/assets/dcc9bf67-52e3-4420-84d3-9f1693c38cf0" />
+
+
+
+
