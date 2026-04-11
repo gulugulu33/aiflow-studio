@@ -26,7 +26,7 @@ const RunPanel: React.FC = () => {
     clearExecutionStates,
   } = useStore()
 
-  const [inputsText, setInputsText] = useState('{}')
+  const [inputsText, setInputsText] = useState('{"question": "你好，请介绍一下自己"}')
   const [isRunning, setIsRunning] = useState(false)
 
   const handleRun = async () => {

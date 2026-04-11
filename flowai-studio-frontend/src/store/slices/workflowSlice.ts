@@ -39,7 +39,7 @@ export interface WorkflowSlice {
   setExecutionStates: (states: Record<string, NodeExecution>) => void
   fetchWorkflows: (appId: string) => Promise<Workflow[]>
   fetchWorkflowById: (id: string) => Promise<Workflow>
-  createWorkflow: (appId: string, data: { name: string; description?: string }) => Promise<Workflow>
+  createWorkflow: (appId: string, data: { name: string; description?: string; nodes?: any[]; edges?: any[] }) => Promise<Workflow>
   updateWorkflow: (id: string, data: Partial<Workflow>) => Promise<Workflow>
   saveWorkflow: (id: string, data: { nodes: WorkflowNode[]; edges: WorkflowEdge[] }) => Promise<Workflow>
   runWorkflow: (workflowId: string) => Promise<any>

@@ -1,87 +1,79 @@
 /**
- * 示例工作流数据：包含全部 7 种节点类型的完整流程
+ * 示例工作流数据：一个可直接运行的 AI 问答 + 条件分支流程
  *
- * 流程图：
- *   开始 → 用户输入 → RAG 知识检索 ─┐
- *                   │               │
- *                   └──→ 大模型回答 ←─┘
- *                          │
- *                     条件分支（判断是否需要工具）
- *                      ├─ 是 → 工具调用 → 输出A（工具增强回答）
- *                      └─ 否 → 输出B（直接回答）
+ * 主路径（可直接运行）：
+ *   开始 → 用户输入 → 大模型回答 → 条件分支
+ *                                     ├─ 是（回答含"不确定"） → 输出A（提示用户补充信息）
+ *                                     └─ 否 → 输出B（直接回答）
+ *
+ * 使用方法：
+ *   在调试面板输入 {"question": "你好，请介绍一下自己"}，点击运行即可
  */
 
 export const DEMO_NODES = [
   {
     id: 'start_1',
     type: 'start',
-    position: { x: 40, y: 200 },
-    data: { label: '开始' },
+    position: { x: 60, y: 260 },
+    data: {
+      label: '开始',
+      variables: [
+        { key: 'greeting', value: '欢迎使用 AiFlow Studio 示例工作流！' },
+      ],
+    },
   },
   {
     id: 'userInput_1',
     type: 'userInput',
-    position: { x: 240, y: 200 },
-    data: { label: '用户输入', inputField: 'question' },
-  },
-  {
-    id: 'rag_1',
-    type: 'rag',
-    position: { x: 470, y: 80 },
+    position: { x: 280, y: 260 },
     data: {
-      label: 'RAG 知识检索',
-      knowledgeBaseId: '',
-      query: '{{userInput_1.question}}',
-      topK: 3,
-      similarityThreshold: 0.7,
+      label: '用户输入',
+      inputField: 'question',
     },
   },
   {
     id: 'llm_1',
     type: 'llm',
-    position: { x: 470, y: 280 },
+    position: { x: 520, y: 260 },
     data: {
       label: '大模型回答',
       model: 'qwen-turbo',
-      systemPrompt: '你是一个智能助手。如果有参考资料请据此回答，否则用自己的知识回答。',
-      userPrompt: '参考资料：{{rag_1.documents}}\n\n用户问题：{{userInput_1.question}}',
+      systemPrompt:
+        '你是一个友好的 AI 助手。请简洁地回答用户的问题。如果你不确定答案，请在回复中明确说"不确定"。',
+      userPrompt: '{{userInput_1.question}}',
       temperature: 0.7,
-      maxTokens: 1024,
+      maxTokens: 512,
     },
   },
   {
     id: 'condition_1',
     type: 'condition',
-    position: { x: 740, y: 280 },
+    position: { x: 800, y: 260 },
     data: {
-      label: '是否需要工具',
-      conditions: '[{"variable":"{{llm_1.result}}","operator":"contains","value":"需要计算"}]',
-    },
-  },
-  {
-    id: 'skill_1',
-    type: 'skill',
-    position: { x: 1000, y: 160 },
-    data: {
-      label: '工具调用',
-      skillId: '',
-      skillType: 'builtin',
-      parameters: '{}',
+      label: '是否不确定',
+      conditions: [
+        {
+          variable: '{{llm_1.result}}',
+          operator: 'contains',
+          value: '不确定',
+        },
+      ],
     },
   },
   {
     id: 'output_1',
     type: 'output',
-    position: { x: 1260, y: 160 },
+    position: { x: 1100, y: 140 },
     data: {
-      label: '输出（工具增强）',
-      outputValue: '工具结果：{{skill_1.result}}\n\nAI回答：{{llm_1.result}}',
+      label: '输出（需补充）',
+      outputValue:
+        '⚠️ AI 表示不太确定，建议补充更多信息后再试。\n\n原始回答：{{llm_1.result}}',
     },
   },
   {
     id: 'output_2',
     type: 'output',
-    position: { x: 1000, y: 400 },
+    position: { x: 1100, y: 380 },
     data: {
       label: '输出（直接回答）',
       outputValue: '{{llm_1.result}}',
@@ -91,14 +83,23 @@ export const DEMO_NODES = [
 
 export const DEMO_EDGES = [
   { id: 'e-start-input', source: 'start_1', target: 'userInput_1' },
-  { id: 'e-input-rag', source: 'userInput_1', target: 'rag_1' },
   { id: 'e-input-llm', source: 'userInput_1', target: 'llm_1' },
-  { id: 'e-rag-llm', source: 'rag_1', target: 'llm_1' },
   { id: 'e-llm-cond', source: 'llm_1', target: 'condition_1' },
-  { id: 'e-cond-skill', source: 'condition_1', target: 'skill_1', sourceHandle: 'true', label: '是' },
-  { id: 'e-cond-out2', source: 'condition_1', target: 'output_2', sourceHandle: 'false', label: '否' },
-  { id: 'e-skill-out1', source: 'skill_1', target: 'output_1' },
+  {
+    id: 'e-cond-out1',
+    source: 'condition_1',
+    target: 'output_1',
+    sourceHandle: 'true',
+    label: '是',
+  },
+  {
+    id: 'e-cond-out2',
+    source: 'condition_1',
+    target: 'output_2',
+    sourceHandle: 'false',
+    label: '否',
+  },
 ]
 
 /** 示例应用名称标记，用于识别是否已创建过 */
-export const DEMO_APP_NAME = '📖 示例应用（全节点演示）'
+export const DEMO_APP_NAME = '📖 示例应用 — AI 智能问答'

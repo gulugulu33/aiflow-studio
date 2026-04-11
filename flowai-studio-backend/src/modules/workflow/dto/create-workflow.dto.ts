@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsUUID, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsUUID, IsArray } from 'class-validator';
 
 export class CreateWorkflowDto {
   @IsString({ message: 'Name must be a string' })
@@ -12,14 +12,13 @@ export class CreateWorkflowDto {
   applicationId: string;
 
   @IsOptional()
-  @IsObject({ message: 'Nodes must be an object' })
-  nodes?: Record<string, unknown>;
+  @IsArray({ message: 'Nodes must be an array' })
+  nodes?: any[];
 
   @IsOptional()
-  @IsObject({ message: 'Edges must be an object' })
-  edges?: Record<string, unknown>;
+  @IsArray({ message: 'Edges must be an array' })
+  edges?: any[];
 
   @IsOptional()
-  @IsObject({ message: 'Variables must be an object' })
   variables?: Record<string, unknown>;
 }

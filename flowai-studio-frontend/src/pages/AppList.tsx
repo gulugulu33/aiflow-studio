@@ -22,7 +22,7 @@ const AppList: React.FC = () => {
   const navigate = useNavigate()
   const {
     apps, isLoading, fetchApps, createApp, updateApp, deleteApp, publishApp, unpublishApp,
-    createWorkflow, saveWorkflow,
+    createWorkflow,
   } = useStore()
 
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -45,14 +45,15 @@ const AppList: React.FC = () => {
       try {
         const demoApp = await createApp({
           name: DEMO_APP_NAME,
-          description: '包含全部 7 种节点类型（开始、用户输入、RAG、大模型、条件分支、工具、输出）的示例工作流，可自由修改或删除。',
+          description: '一个可直接运行的 AI 问答工作流，包含用户输入、大模型回答和条件分支。在调试面板输入 {"question": "你的问题"} 即可运行。',
         })
-        // 为示例应用创建预置工作流
-        const wf = await createWorkflow(demoApp.id, {
-          name: '示例工作流（全节点演示）',
-          description: '覆盖所有节点类型的完整 RAG + 条件分支流程',
+        // 一步创建工作流 + 节点，后端 create 接口支持同时传入 nodes/edges
+        await createWorkflow(demoApp.id, {
+          name: '示例工作流 — AI 智能问答',
+          description: '用户输入 → 大模型回答 → 条件分支 → 输出',
+          nodes: DEMO_NODES as any,
+          edges: DEMO_EDGES as any,
         })
-        await saveWorkflow(wf.id, { nodes: DEMO_NODES as any, edges: DEMO_EDGES as any })
         message.success('已为你创建示例应用，点击查看完整工作流 🎉')
       } catch {
         // 创建示例失败不影响用户使用
