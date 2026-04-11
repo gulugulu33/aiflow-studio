@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../common/services/prisma.service';
 import { CreateKnowledgeBaseDto } from '../dto/create-knowledge-base.dto';
 import { UpdateKnowledgeBaseDto } from '../dto/update-knowledge-base.dto';
@@ -8,6 +8,7 @@ import * as fs from 'fs';
 
 @Injectable()
 export class RAGService {
+  private readonly logger = new Logger(RAGService.name);
   private readonly qwenApiKey: string;
   private readonly qwenBaseUrl: string;
 
@@ -110,6 +111,14 @@ export class RAGService {
     }
 
     const chunks = await this.processDocumentContent(content);
+
+    // 检查同名文件是否已存在
+    const existingDoc = await this.prisma.document.findFirst({
+      where: { name: file.originalname, knowledgeBaseId },
+    });
+    if (existingDoc) {
+      throw new BadRequestException(`该知识库中已存在同名文件「${file.originalname}」，请重命名后重新上传`);
+    }
 
     const document = await this.prisma.document.create({
       data: {
@@ -277,7 +286,7 @@ export class RAGService {
       const response = await axios.post(
         `${this.qwenBaseUrl}/embeddings`,
         {
-          model: 'text-embedding-3-small',
+          model: 'text-embedding-v3',
           input: text,
         },
         {
@@ -290,6 +299,7 @@ export class RAGService {
 
       return response.data.data[0].embedding;
     } catch (error) {
+      this.logger.warn(`Embedding generation failed: ${error instanceof Error ? error.message : error}`);
       return [];
     }
   }
