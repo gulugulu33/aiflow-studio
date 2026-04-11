@@ -32,7 +32,7 @@ export class RAGService {
   async findKnowledgeBases(userId: string) {
     return this.prisma.knowledgeBase.findMany({
       where: { userId },
-      include: { documents: { select: { id: true, name: true, createdAt: true, status: true } } },
+      include: { documents: { select: { id: true, name: true, size: true, createdAt: true, status: true } } },
     });
   }
 

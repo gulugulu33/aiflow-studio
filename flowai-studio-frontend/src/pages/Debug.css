@@ -525,6 +525,137 @@
   justify-content: center;
 }
 
+/* ===== Markdown 渲染样式 ===== */
+.chat-markdown {
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.chat-markdown > :first-child {
+  margin-top: 0;
+}
+
+.chat-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown p {
+  margin: 0 0 8px;
+}
+
+.chat-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown strong {
+  font-weight: 700;
+  color: var(--c-text-primary);
+}
+
+.chat-markdown em {
+  font-style: italic;
+}
+
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3,
+.chat-markdown h4 {
+  margin: 12px 0 6px;
+  font-weight: 700;
+  color: var(--c-text-primary);
+  line-height: 1.4;
+}
+
+.chat-markdown h1 { font-size: 1.3em; }
+.chat-markdown h2 { font-size: 1.15em; }
+.chat-markdown h3 { font-size: 1.05em; }
+.chat-markdown h4 { font-size: 1em; }
+
+.chat-markdown ul,
+.chat-markdown ol {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.chat-markdown li {
+  margin-bottom: 3px;
+}
+
+.chat-markdown code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  font-family: 'JetBrains Mono', 'Monaco', 'Menlo', monospace;
+  font-size: 0.88em;
+  color: var(--c-accent);
+}
+
+.chat-markdown pre {
+  margin: 8px 0;
+  padding: 12px 14px;
+  border-radius: var(--c-radius-sm);
+  background: #1e1e2e;
+  color: #cdd6f4;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.chat-markdown pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+
+.chat-markdown blockquote {
+  margin: 8px 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--c-accent);
+  background: var(--c-accent-light);
+  border-radius: 0 var(--c-radius-sm) var(--c-radius-sm) 0;
+  color: var(--c-text-secondary);
+}
+
+.chat-markdown blockquote p {
+  margin: 0;
+}
+
+.chat-markdown hr {
+  margin: 10px 0;
+  border: none;
+  border-top: 1px solid var(--c-border);
+}
+
+.chat-markdown table {
+  margin: 8px 0;
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.chat-markdown th,
+.chat-markdown td {
+  padding: 6px 10px;
+  border: 1px solid var(--c-border);
+  text-align: left;
+}
+
+.chat-markdown th {
+  background: var(--c-bg);
+  font-weight: 600;
+}
+
+.chat-markdown a {
+  color: var(--c-accent);
+  text-decoration: none;
+}
+
+.chat-markdown a:hover {
+  text-decoration: underline;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .debug-page-header {

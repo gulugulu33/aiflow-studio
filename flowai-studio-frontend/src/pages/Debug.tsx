@@ -15,6 +15,7 @@ import {
   StopOutlined,
   ClearOutlined,
 } from '@ant-design/icons'
+import ReactMarkdown from 'react-markdown'
 import { useStore } from '../store'
 import request from '../utils/axios'
 import { createParser } from 'eventsource-parser'
@@ -362,7 +363,13 @@ const Debug: React.FC = () => {
                         </span>
                       </div>
                       <div className={`chat-bubble chat-bubble--${msg.role}`}>
-                        <Paragraph style={{ margin: 0 }}>{msg.content}</Paragraph>
+                        {msg.role === 'assistant' ? (
+                          <div className="chat-markdown">
+                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          </div>
+                        ) : (
+                          <Paragraph style={{ margin: 0 }}>{msg.content}</Paragraph>
+                        )}
 
                         {msg.references && msg.references.length > 0 && (
                           <div className="chat-refs">
@@ -404,7 +411,9 @@ const Debug: React.FC = () => {
                         <span className="chat-streaming-label">生成中…</span>
                       </div>
                       <div className="chat-bubble chat-bubble--assistant">
-                        <Paragraph style={{ margin: 0 }}>{streamingContent}</Paragraph>
+                        <div className="chat-markdown">
+                          <ReactMarkdown>{streamingContent || '…'}</ReactMarkdown>
+                        </div>
                       </div>
                     </div>
                   </div>

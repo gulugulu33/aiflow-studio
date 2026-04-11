@@ -350,7 +350,12 @@ const KnowledgeBase: React.FC = () => {
                     dataIndex: 'size',
                     key: 'size',
                     width: 100,
-                    render: (size: number) => `${(size / 1024).toFixed(1)} KB`,
+                    render: (size: number) => {
+                      if (size == null || isNaN(size)) return '-'
+                      if (size < 1024) return `${size} B`
+                      if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+                      return `${(size / 1024 / 1024).toFixed(1)} MB`
+                    },
                   },
                   {
                     title: '上传时间',
