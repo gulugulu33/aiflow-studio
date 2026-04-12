@@ -16,15 +16,6 @@ export interface RegisterForm {
   password: string
 }
 
-// API响应类型
-export interface ApiResponse<T> {
-  success: boolean
-  code: string
-  message: string
-  data: T
-  timestamp: string
-}
-
 // 应用相关类型
 export interface Application {
   id: string
@@ -174,29 +165,6 @@ export interface Skill {
   isActive: boolean
   createdAt: string
   updatedAt: string
-}
-
-// 聊天消息类型
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  references?: DocumentReference[]
-  toolCalls?: ToolCall[]
-  createdAt: string
-}
-
-export interface DocumentReference {
-  documentId: string
-  documentName: string
-  content: string
-  similarity: number
-}
-
-export interface ToolCall {
-  toolName: string
-  params: Record<string, unknown>
-  result: unknown
 }
 
 // 节点执行状态

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../common/services/prisma.service';
-import { CreateKnowledgeBaseDto } from '../dto/create-knowledge-base.dto';
-import { UpdateKnowledgeBaseDto } from '../dto/update-knowledge-base.dto';
+import { CreateKnowledgeBaseDto } from '../dto/create-kb.dto';
+import { UpdateKnowledgeBaseDto } from '../dto/update-kb.dto';
 import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
