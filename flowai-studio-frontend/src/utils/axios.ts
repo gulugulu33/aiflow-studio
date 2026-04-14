@@ -123,25 +123,4 @@ request.interceptors.response.use(
   }
 )
 
-// 添加重试机制
-const MAX_RETRY_COUNT = 3
-const RETRY_DELAY = 1000
-
-const retryRequest = async (config: any, retryCount = 0): Promise<any> => {
-  try {
-    return await request(config)
-  } catch (error: any) {
-    // 只在网络错误或服务器错误时重试
-    if (retryCount < MAX_RETRY_COUNT && 
-        (!error.response || error.response.status >= 500)) {
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)))
-      return retryRequest(config, retryCount + 1)
-    }
-    throw error
-  }
-}
-
-// 导出带重试的请求方法
-export const requestWithRetry = retryRequest
-
 export default request

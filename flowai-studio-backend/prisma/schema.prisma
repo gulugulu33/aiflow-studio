@@ -21,6 +21,7 @@ model User {
   knowledgeBases  KnowledgeBase[]
   skills          Skill[]
   chatHistories   ChatHistory[]
+  mcpServers      McpServer[]
 
   @@map("users")
 }
@@ -245,4 +246,35 @@ model ChatHistory {
   @@index([sessionId])
   @@index([userId])
   @@map("chat_histories")
+}
+
+// MCP 服务器配置表
+model McpServer {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+
+  // 连接方式: stdio | sse
+  transportType String @default("stdio")
+
+  // stdio 模式: 启动命令 (如 "npx -y @modelcontextprotocol/server-filesystem /tmp")
+  command     String?
+  args        String?   // JSON 数组字符串, 如 '["--port","3001"]'
+  env         String?   // JSON 对象字符串, 额外环境变量
+
+  // SSE 模式: 服务器 URL
+  url         String?
+
+  // 状态
+  isActive    Boolean @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 外键
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([name, userId])
+  @@map("mcp_servers")
 }

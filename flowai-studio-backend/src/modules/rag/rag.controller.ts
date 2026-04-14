@@ -13,8 +13,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { RAGService } from './services/rag.service';
-import { CreateKnowledgeBaseDto } from './dto/create-knowledge-base.dto';
-import { UpdateKnowledgeBaseDto } from './dto/update-knowledge-base.dto';
+import { CreateKnowledgeBaseDto } from './dto/create-kb.dto';
+import { UpdateKnowledgeBaseDto } from './dto/update-kb.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 

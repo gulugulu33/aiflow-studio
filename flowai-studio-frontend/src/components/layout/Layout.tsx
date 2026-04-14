@@ -9,6 +9,7 @@ import {
   AppstoreOutlined,
   BookOutlined,
   ToolOutlined,
+  ApiOutlined,
   BugOutlined,
   RadarChartOutlined,
   ThunderboltOutlined,
@@ -24,6 +25,7 @@ const routeMeta: Record<string, { title: string }> = {
   '/apps': { title: '工作台' },
   '/knowledge-bases': { title: '知识库' },
   '/tools': { title: '工具管理' },
+  '/mcp': { title: 'MCP 服务器' },
   '/debug': { title: '调试中心' },
 }
 
@@ -53,6 +55,11 @@ const Layout: React.FC = () => {
       key: '/tools',
       icon: <ToolOutlined />,
       label: '工具管理',
+    },
+    {
+      key: '/mcp',
+      icon: <ApiOutlined />,
+      label: 'MCP 服务器',
     },
     {
       key: '/debug',

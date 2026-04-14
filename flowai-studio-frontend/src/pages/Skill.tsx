@@ -39,8 +39,11 @@ const Skill: React.FC = () => {
     type: 'builtin',
     builtinType: '',
     isActive: true,
+    config: { url: '', method: 'POST', headers: '' },
   })
   const [executionParams, setExecutionParams] = useState<Record<string, any>>({})
+  const [executionParamsText, setExecutionParamsText] = useState('{}')
+  const [jsonError, setJsonError] = useState('')
   const [builtinSkills, setBuiltinSkills] = useState<any[]>([])
   const [executionResult, setExecutionResult] = useState<any>(null)
 
@@ -62,18 +65,30 @@ const Skill: React.FC = () => {
 
   const handleAddSkill = () => {
     setEditingSkill(null)
-    setFormData({ name: '', description: '', type: 'builtin', builtinType: '', isActive: true })
+    setFormData({ name: '', description: '', type: 'builtin', builtinType: '', isActive: true, config: { url: '', method: 'POST', headers: '' } })
     setModalVisible(true)
   }
 
   const handleEditSkill = (skill: any) => {
     setEditingSkill(skill)
+    let config = { url: '', method: 'POST', headers: '' }
+    if (skill.config) {
+      try {
+        const parsed = typeof skill.config === 'string' ? JSON.parse(skill.config) : skill.config
+        config = {
+          url: parsed.url || '',
+          method: parsed.method || 'POST',
+          headers: parsed.headers ? (typeof parsed.headers === 'string' ? parsed.headers : JSON.stringify(parsed.headers, null, 2)) : '',
+        }
+      } catch { /* ignore */ }
+    }
     setFormData({
       name: skill.name,
       description: skill.description || '',
       type: skill.type,
       builtinType: skill.builtinType || '',
       isActive: skill.isActive,
+      config,
     })
     setModalVisible(true)
   }
@@ -87,12 +102,35 @@ const Skill: React.FC = () => {
       message.error('请选择内置工具类型')
       return
     }
+    if (formData.type === 'custom' && !formData.config.url) {
+      message.error('请输入自定义工具的 API 地址')
+      return
+    }
     try {
+      // Build the payload
+      const payload: any = {
+        name: formData.name,
+        description: formData.description,
+        type: formData.type,
+        builtinType: formData.builtinType,
+        isActive: formData.isActive,
+      }
+      if (formData.type === 'custom') {
+        let headers = {}
+        if (formData.config.headers) {
+          try { headers = JSON.parse(formData.config.headers) } catch { headers = {} }
+        }
+        payload.config = {
+          url: formData.config.url,
+          method: formData.config.method,
+          headers,
+        }
+      }
       if (editingSkill) {
-        await updateSkill(editingSkill.id, formData)
+        await updateSkill(editingSkill.id, payload)
         message.success('工具更新成功')
       } else {
-        await createSkill(formData)
+        await createSkill(payload)
         message.success('工具创建成功')
       }
       setModalVisible(false)
@@ -113,14 +151,25 @@ const Skill: React.FC = () => {
   const handleExecuteSkill = (skill: any) => {
     setSelectedSkill(skill)
     setExecutionParams({})
+    setExecutionParamsText('{}')
+    setJsonError('')
     setExecutionResult(null)
     setExecutionModalVisible(true)
   }
 
   const handleRunExecution = async () => {
     if (!selectedSkill) return
+    // Re-parse from text to catch any errors
+    let parsedParams = executionParams
     try {
-      const result = await executeSkill(selectedSkill.id, executionParams)
+      parsedParams = JSON.parse(executionParamsText)
+      setJsonError('')
+    } catch {
+      setJsonError('JSON 格式错误，请检查输入')
+      return
+    }
+    try {
+      const result = await executeSkill(selectedSkill.id, parsedParams)
       setExecutionResult(result)
       message.success('工具执行成功')
     } catch {
@@ -252,6 +301,37 @@ const Skill: React.FC = () => {
               </Select>
             </Form.Item>
           )}
+          {formData.type === 'custom' && (
+            <>
+              <Form.Item label="API 地址" required>
+                <Input
+                  value={formData.config.url}
+                  onChange={(e) => setFormData({ ...formData, config: { ...formData.config, url: e.target.value } })}
+                  placeholder="https://api.example.com/execute"
+                />
+              </Form.Item>
+              <Form.Item label="HTTP 方法">
+                <Select
+                  value={formData.config.method}
+                  onChange={(value) => setFormData({ ...formData, config: { ...formData.config, method: value } })}
+                >
+                  <Select.Option value="GET">GET</Select.Option>
+                  <Select.Option value="POST">POST</Select.Option>
+                  <Select.Option value="PUT">PUT</Select.Option>
+                  <Select.Option value="DELETE">DELETE</Select.Option>
+                  <Select.Option value="PATCH">PATCH</Select.Option>
+                </Select>
+              </Form.Item>
+              <Form.Item label="请求头 (JSON)" tooltip="可选，JSON 格式如 {&quot;Authorization&quot;: &quot;Bearer xxx&quot;}">
+                <TextArea
+                  value={formData.config.headers}
+                  onChange={(e) => setFormData({ ...formData, config: { ...formData.config, headers: e.target.value } })}
+                  placeholder='{"Authorization": "Bearer your-token"}'
+                  rows={3}
+                />
+              </Form.Item>
+            </>
+          )}
           <Form.Item label="状态">
             <Switch
               checked={formData.isActive}
@@ -281,14 +361,22 @@ const Skill: React.FC = () => {
           <div className="exec-section">
             <h4 className="exec-section-title">执行参数</h4>
             <TextArea
-              value={JSON.stringify(executionParams, null, 2)}
+              value={executionParamsText}
               onChange={(e) => {
-                try { setExecutionParams(JSON.parse(e.target.value)) } catch { /* ignore */ }
+                setExecutionParamsText(e.target.value)
+                try {
+                  JSON.parse(e.target.value)
+                  setJsonError('')
+                } catch {
+                  setJsonError('JSON 格式错误')
+                }
               }}
               placeholder='{"param1": "value1"}'
               rows={6}
               className="exec-textarea"
+              status={jsonError ? 'error' : undefined}
             />
+            {jsonError && <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>{jsonError}</div>}
           </div>
 
           {executionResult && (

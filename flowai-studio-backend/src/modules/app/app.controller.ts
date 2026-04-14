@@ -72,4 +72,20 @@ export class AppController {
   ) {
     return this.appService.unpublish(userId, id);
   }
+
+  @Patch(':id/archive')
+  archive(
+    @CurrentUser('userId') userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.appService.archive(userId, id);
+  }
+
+  @Patch(':id/unarchive')
+  unarchive(
+    @CurrentUser('userId') userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.appService.unarchive(userId, id);
+  }
 }

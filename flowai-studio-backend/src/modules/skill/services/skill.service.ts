@@ -86,13 +86,19 @@ export class SkillService {
   }
 
   // 执行工具
-  async executeSkill(skillId: string, params: Record<string, any>) {
+  // userId 可选：从 controller 直接调用时传入做权限校验，工作流内部调用可省略
+  async executeSkill(skillId: string, params: Record<string, any>, userId?: string) {
     const skill = await this.prisma.skill.findUnique({
       where: { id: skillId },
     });
 
     if (!skill) {
       throw new NotFoundException('Skill not found');
+    }
+
+    // 如果传入了 userId，做归属校验
+    if (userId && skill.userId !== userId) {
+      throw new BadRequestException('You do not have permission to execute this skill');
     }
 
     if (!skill.isActive) {
@@ -102,7 +108,6 @@ export class SkillService {
     if (skill.type === 'builtin') {
       return executeBuiltinSkill(skill.builtinType!, params);
     } else {
-      // 执行自定义工具
       return this.executeCustomSkill(skill, params);
     }
   }
@@ -126,6 +131,7 @@ export class SkillService {
         method,
         headers,
         data: params,
+        timeout: 15000, // 15 秒超时
       });
 
       return {
@@ -192,6 +198,31 @@ export class SkillService {
         outputSchema: {
           matches: 'array',
           groups: 'object',
+        },
+      },
+      {
+        type: 'calculator',
+        name: '计算器',
+        description: '计算数学表达式，支持加减乘除、取余、乘方',
+        inputSchema: {
+          expression: 'string',
+        },
+        outputSchema: {
+          expression: 'string',
+          result: 'number',
+        },
+      },
+      {
+        type: 'code',
+        name: '代码执行',
+        description: '在安全沙箱中执行 JavaScript 代码',
+        inputSchema: {
+          code: 'string',
+          language: 'string',
+        },
+        outputSchema: {
+          result: 'any',
+          logs: 'array',
         },
       },
     ];

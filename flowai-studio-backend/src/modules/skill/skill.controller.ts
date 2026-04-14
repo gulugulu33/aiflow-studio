@@ -62,9 +62,10 @@ export class SkillController {
   // 执行工具
   @Post(':id/execute')
   executeSkill(
+    @CurrentUser('userId') userId: string,
     @Param('id') id: string,
     @Body('params') params: Record<string, any>,
   ) {
-    return this.skillService.executeSkill(id, params);
+    return this.skillService.executeSkill(id, params, userId);
   }
 }
