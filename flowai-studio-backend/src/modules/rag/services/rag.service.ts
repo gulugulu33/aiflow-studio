@@ -5,19 +5,32 @@ import { UpdateKnowledgeBaseDto } from '../dto/update-knowledge-base.dto';
 import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
+import { normalizeUploadedFilename } from '../../../common/utils/normalize-uploaded-filename';
 
 @Injectable()
 export class RAGService {
   private readonly logger = new Logger(RAGService.name);
   private readonly qwenApiKey: string;
   private readonly qwenBaseUrl: string;
+  private readonly useOpenAiGateway: boolean;
 
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
   ) {
-    this.qwenApiKey = this.configService.get<string>('QWEN_API_KEY')!;
-    this.qwenBaseUrl = this.configService.get<string>('QWEN_BASE_URL')!;
+    const openAiApiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const openAiBaseUrl = this.configService.get<string>('OPENAI_BASE_URL');
+    this.useOpenAiGateway = Boolean(openAiApiKey && openAiBaseUrl);
+
+    this.qwenApiKey = (this.useOpenAiGateway
+      ? openAiApiKey
+      : this.configService.get<string>('QWEN_API_KEY')) || '';
+
+    this.qwenBaseUrl = (
+      (this.useOpenAiGateway
+        ? openAiBaseUrl
+        : this.configService.get<string>('QWEN_BASE_URL')) || ''
+    ).replace(/\/+$/, '');
   }
 
   // 知识库管理
@@ -82,7 +95,9 @@ export class RAGService {
     await this.findKnowledgeBaseById(userId, knowledgeBaseId);
 
     const mimeType = file.mimetype || 'application/octet-stream';
-    const fileName = file.originalname || '';
+    const originalName = file.originalname || '';
+    const normalizedName = normalizeUploadedFilename(originalName);
+    const fileName = normalizedName;
     const lowerName = fileName.toLowerCase();
     const ext = lowerName.includes('.') ? lowerName.slice(lowerName.lastIndexOf('.')) : '';
     const isTextExt = ['.txt', '.md', '.markdown', '.json', '.csv', '.log', '.yaml', '.yml'].includes(ext);
@@ -114,15 +129,15 @@ export class RAGService {
 
     // 检查同名文件是否已存在
     const existingDoc = await this.prisma.document.findFirst({
-      where: { name: file.originalname, knowledgeBaseId },
+      where: { name: normalizedName, knowledgeBaseId },
     });
     if (existingDoc) {
-      throw new BadRequestException(`该知识库中已存在同名文件「${file.originalname}」，请重命名后重新上传`);
+      throw new BadRequestException(`该知识库中已存在同名文件「${normalizedName}」，请重命名后重新上传`);
     }
 
     const document = await this.prisma.document.create({
       data: {
-        name: file.originalname,
+        name: normalizedName,
         content,
         mimeType,
         size: file.size || contentBuffer.length,
@@ -278,15 +293,28 @@ export class RAGService {
 
   // 生成向量嵌入
   private async generateEmbedding(text: string): Promise<number[]> {
-    if (!this.qwenApiKey || this.qwenApiKey === 'your-qwen-api-key-here') {
+    if (
+      !this.qwenApiKey ||
+      this.qwenApiKey === 'your-qwen-api-key-here' ||
+      this.qwenApiKey === 'your-openai-api-key-here'
+    ) {
       return [];
     }
+
+    if (!this.qwenBaseUrl) {
+      return [];
+    }
+
+    const embeddingModel =
+      this.useOpenAiGateway
+        ? this.configService.get<string>('OPENAI_EMBEDDING_MODEL')
+        : 'text-embedding-v3';
 
     try {
       const response = await axios.post(
         `${this.qwenBaseUrl}/embeddings`,
         {
-          model: 'text-embedding-v3',
+          model: embeddingModel,
           input: text,
         },
         {

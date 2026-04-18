@@ -144,8 +144,21 @@ export class AiService {
 
     try {
       const { message, history = [], sessionId = Date.now().toString(), knowledgeBaseId } = chatDto;
-      const apiKey = this.configService.get<string>('QWEN_API_KEY');
-      const baseUrl = this.configService.get<string>('QWEN_BASE_URL');
+      const openAiApiKey = this.configService.get<string>('OPENAI_API_KEY');
+      const openAiBaseUrl = this.configService.get<string>('OPENAI_BASE_URL');
+      const useOpenAiGateway = Boolean(openAiApiKey && openAiBaseUrl);
+
+      const apiKey = useOpenAiGateway
+        ? openAiApiKey
+        : this.configService.get<string>('QWEN_API_KEY');
+      const baseUrl = useOpenAiGateway
+        ? openAiBaseUrl
+        : this.configService.get<string>('QWEN_BASE_URL');
+      const normalizedBaseUrl = (baseUrl || '').replace(/\/+$/, '');
+
+      const chatModel = useOpenAiGateway
+        ? this.configService.get<string>('OPENAI_CHAT_MODEL')
+        : 'qwen-turbo';
 
       // 1. 保存用户消息（非阻塞，失败不影响对话）
       this.prisma.chatHistory.create({
@@ -161,7 +174,8 @@ export class AiService {
           references = await this.ragService.retrieve(message, knowledgeBaseId, 5);
           context = references.map((ref: any) => ref.content).join('\n\n');
         } catch (ragError) {
-          console.error('RAG 检索失败，降级为普通对话:', ragError.message);
+          const ragMsg = ragError instanceof Error ? ragError.message : String(ragError);
+          console.error('RAG 检索失败，降级为普通对话:', ragMsg);
         }
       }
 
@@ -176,10 +190,10 @@ export class AiService {
       messages.push(...history);
       messages.push({ role: 'user', content: message });
 
-      // 4. 调用 Qwen 流式 API
+      // 4. 调用 OpenAI-compatible 流式 API
       const response = await axios.post(
-        `${baseUrl}/chat/completions`,
-        { model: 'qwen-turbo', messages, stream: true },
+        `${normalizedBaseUrl}/chat/completions`,
+        { model: chatModel, messages, stream: true },
         {
           headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -246,12 +260,25 @@ export class AiService {
     userPrompt: string,
     systemPrompt?: string,
     history: any[] = [],
-    model = 'qwen-turbo',
+    model?: string,
     temperature = 0.7,
     maxTokens = 2048,
   ): Promise<string> {
-    const apiKey = this.configService.get<string>('QWEN_API_KEY');
-    const baseUrl = this.configService.get<string>('QWEN_BASE_URL');
+    const openAiApiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const openAiBaseUrl = this.configService.get<string>('OPENAI_BASE_URL');
+    const useOpenAiGateway = Boolean(openAiApiKey && openAiBaseUrl);
+
+    const apiKey = useOpenAiGateway
+      ? openAiApiKey
+      : this.configService.get<string>('QWEN_API_KEY');
+    const baseUrl = useOpenAiGateway
+      ? openAiBaseUrl
+      : this.configService.get<string>('QWEN_BASE_URL');
+    const normalizedBaseUrl = (baseUrl || '').replace(/\/+$/, '');
+
+    const chatModel = model || (useOpenAiGateway
+      ? this.configService.get<string>('OPENAI_CHAT_MODEL')
+      : 'qwen-turbo');
 
     const messages = [];
     if (systemPrompt) {
@@ -262,9 +289,9 @@ export class AiService {
 
     try {
       const response = await axios.post(
-        `${baseUrl}/chat/completions`,
+        `${normalizedBaseUrl}/chat/completions`,
         {
-          model,
+          model: chatModel,
           messages,
           temperature,
           max_tokens: maxTokens,
@@ -278,7 +305,8 @@ export class AiService {
       );
       return response.data.choices[0].message.content;
     } catch (error) {
-      console.error('Error calling LLM API:', error.response?.data || error.message);
+      const err = error as any;
+      console.error('Error calling LLM API:', err?.response?.data || err?.message || err);
       throw new Error('Failed to get response from LLM.');
     }
   }

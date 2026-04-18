@@ -31,3 +31,9 @@ yarn-error.log*
 
 # Uploads / runtime data
 **/uploads/
+
+# AI Prompting
+.claude
+.codex
+.github
+openspec
