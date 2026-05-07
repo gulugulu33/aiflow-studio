@@ -6,7 +6,7 @@
 .editor-root {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100vh - 58px);
   overflow: hidden;
   margin: -24px;              /* cancel Content padding from Layout */
   background: var(--c-bg);
