@@ -8,86 +8,45 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../common/services/prisma.service';
+import { RedisService } from '../../common/services/redis.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-
-// 登录尝试记录接口
-interface LoginAttempt {
-  username: string;
-  attempts: number;
-  lastAttempt: Date;
-  lockedUntil?: Date;
-}
-
-// 内存中的登录尝试记录（生产环境应使用Redis）
-const loginAttempts = new Map<string, LoginAttempt>();
 
 @Injectable()
 export class UserService {
   private readonly MAX_LOGIN_ATTEMPTS = 5;
-  private readonly LOCKOUT_DURATION = 15 * 60 * 1000; // 15分钟
+  private readonly LOCKOUT_DURATION = 15 * 60; // 15 分钟（秒）
 
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private redisService: RedisService,
   ) {}
 
   /**
    * 检查账户是否被锁定
+   * 使用 Redis 替代内存 Map — 服务重启后锁定状态不丢失
    */
-  private checkAccountLock(username: string): void {
-    const attempt = loginAttempts.get(username);
-    
-    if (attempt?.lockedUntil && attempt.lockedUntil > new Date()) {
-      const remainingMinutes = Math.ceil((attempt.lockedUntil.getTime() - Date.now()) / 60000);
+  private async checkAccountLock(username: string): Promise<void> {
+    const { locked, remainingMinutes } = await this.redisService.checkAccountLock(username);
+
+    if (locked && remainingMinutes) {
       throw new UnauthorizedException(`账户已被锁定，请 ${remainingMinutes} 分钟后再试`);
     }
   }
 
   /**
    * 记录登录尝试
+   * Redis Key: login_attempts:{username}
+   * 过期时间: 1 小时自动清理
    */
-  private recordLoginAttempt(username: string, success: boolean): void {
-    let attempt = loginAttempts.get(username);
-    
-    if (!attempt) {
-      attempt = {
-        username,
-        attempts: 0,
-        lastAttempt: new Date(),
-      };
-    }
+  private async recordLoginAttempt(username: string, success: boolean): Promise<number> {
+    await this.redisService.recordLoginAttempt(username, success, this.MAX_LOGIN_ATTEMPTS, this.LOCKOUT_DURATION);
 
-    if (success) {
-      // 登录成功，重置尝试记录
-      attempt.attempts = 0;
-      attempt.lockedUntil = undefined;
-    } else {
-      // 登录失败，增加尝试次数
-      attempt.attempts += 1;
-      attempt.lastAttempt = new Date();
-      
-      // 如果超过最大尝试次数，锁定账户
-      if (attempt.attempts >= this.MAX_LOGIN_ATTEMPTS) {
-        attempt.lockedUntil = new Date(Date.now() + this.LOCKOUT_DURATION);
-      }
-    }
+    if (success) return 0;
 
-    loginAttempts.set(username, attempt);
-  }
-
-  /**
-   * 清理过期的登录尝试记录
-   */
-  private cleanupExpiredAttempts(): void {
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-    
-    for (const [username, attempt] of loginAttempts.entries()) {
-      if (attempt.lastAttempt < oneHourAgo && !attempt.lockedUntil) {
-        loginAttempts.delete(username);
-      }
-    }
+    const { remainingAttempts } = await this.redisService.checkAccountLock(username);
+    return remainingAttempts ?? 0;
   }
 
   async register(registerDto: RegisterDto) {
@@ -148,11 +107,8 @@ export class UserService {
       throw new BadRequestException('用户名和密码不能为空');
     }
 
-    // 清理过期记录
-    this.cleanupExpiredAttempts();
-
-    // 检查账户是否被锁定
-    this.checkAccountLock(username);
+    // 检查账户是否被锁定（Redis 持久化，重启不丢失）
+    await this.checkAccountLock(username);
 
     try {
       const user = await this.prisma.user.findUnique({
@@ -160,25 +116,23 @@ export class UserService {
       });
 
       if (!user) {
-        this.recordLoginAttempt(username, false);
-        throw new UnauthorizedException('用户名或密码错误');
+        const remaining = await this.recordLoginAttempt(username, false);
+        throw new UnauthorizedException(
+          `用户名或密码错误，剩余尝试次数：${remaining}`
+        );
       }
 
       const isPasswordValid = await bcrypt.compare(password, user.password);
 
       if (!isPasswordValid) {
-        this.recordLoginAttempt(username, false);
-        
-        const attempt = loginAttempts.get(username);
-        const remainingAttempts = this.MAX_LOGIN_ATTEMPTS - (attempt?.attempts || 0);
-        
+        const remaining = await this.recordLoginAttempt(username, false);
         throw new UnauthorizedException(
-          `用户名或密码错误，剩余尝试次数：${remainingAttempts}`
+          `用户名或密码错误，剩余尝试次数：${remaining}`
         );
       }
 
-      // 登录成功
-      this.recordLoginAttempt(username, true);
+      // 登录成功，清除尝试记录
+      await this.recordLoginAttempt(username, true);
 
       const payload = { 
         userId: user.id, 

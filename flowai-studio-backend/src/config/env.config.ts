@@ -25,6 +25,9 @@ export const envSchema = z.object({
 
   // 数据库配置 — PostgreSQL + pgvector
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+
+  // Redis 配置
+  REDIS_URL: z.string().default('redis://localhost:6379'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
