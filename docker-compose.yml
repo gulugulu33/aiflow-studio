@@ -1,0 +1,124 @@
+# ============================================================
+# FlowAI Studio - Docker Compose 一键部署
+# ============================================================
+# 用法:
+#   开发环境: docker-compose up -d
+#   生产环境: docker-compose -f docker-compose.yml up -d
+#
+# 竞品对标:
+# - Dify: docker-compose (PG + Redis + Weaviate + API + Worker + Web + Nginx)
+# - n8n: docker-compose (PG + Redis + n8n)
+# - FastGPT: docker-compose (MongoDB + FastGPT + Nginx)
+#
+# 架构:
+#   Nginx(Frontend) → Backend(API) → PostgreSQL + pgvector
+#                                    → Redis
+# ============================================================
+
+version: '3.8'
+
+services:
+  # ============================================================
+  # PostgreSQL + pgvector — 主数据库 + 向量存储
+  # ============================================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: flowai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: flowai_studio
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # 自动启用 pgvector 扩展
+      - ./scripts/init-pgvector.sql:/docker-entrypoint-initdb.d/init-pgvector.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d flowai_studio"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # Redis — 缓存 + 会话 + 限流
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: flowai-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --save 300 10
+      --save 60 10000
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # Backend — NestJS API 服务
+  # ============================================================
+  backend:
+    build:
+      context: ./flowai-studio-backend
+      dockerfile: Dockerfile
+    container_name: flowai-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/flowai_studio?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRES_IN: 7d
+      QWEN_API_KEY: ${QWEN_API_KEY}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      QWEN_EMBEDDING_API_KEY: ${QWEN_EMBEDDING_API_KEY:-${QWEN_API_KEY}}
+      QWEN_EMBEDDING_MODEL: ${QWEN_EMBEDDING_MODEL:-text-embedding-v3}
+      QWEN_EMBEDDING_DIMENSION: ${QWEN_EMBEDDING_DIMENSION:-1024}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+
+  # ============================================================
+  # Frontend — Nginx 静态资源服务
+  # ============================================================
+  frontend:
+    build:
+      context: ./flowai-studio-frontend
+      dockerfile: Dockerfile
+    container_name: flowai-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+# ============================================================
+# 持久化卷
+# ============================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  uploads_data:
+    driver: local
