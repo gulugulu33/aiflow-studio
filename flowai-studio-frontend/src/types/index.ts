@@ -114,13 +114,49 @@ export interface Workflow {
 }
 
 // 知识库相关类型
+
+/** Embedding Provider 类型 */
+export type EmbeddingProviderType = 'qwen' | 'openai' | 'ollama'
+
+/** 向量存储后端类型 */
+export type VectorStoreType = 'pgvector' | 'qdrant' | 'milvus'
+
+/** Embedding 模型选项 */
+export const EMBEDDING_MODELS: Record<EmbeddingProviderType, { label: string; value: string; dimension: number }[]> = {
+  qwen: [
+    { label: 'text-embedding-v3 (1024维)', value: 'text-embedding-v3', dimension: 1024 },
+    { label: 'text-embedding-v2 (1536维)', value: 'text-embedding-v2', dimension: 1536 },
+    { label: 'text-embedding-v1 (768维)', value: 'text-embedding-v1', dimension: 768 },
+  ],
+  openai: [
+    { label: 'text-embedding-3-small (1536维)', value: 'text-embedding-3-small', dimension: 1536 },
+    { label: 'text-embedding-3-large (3072维)', value: 'text-embedding-3-large', dimension: 3072 },
+    { label: 'text-embedding-ada-002 (1536维)', value: 'text-embedding-ada-002', dimension: 1536 },
+  ],
+  ollama: [
+    { label: 'nomic-embed-text (768维)', value: 'nomic-embed-text', dimension: 768 },
+    { label: 'mxbai-embed-large (1024维)', value: 'mxbai-embed-large', dimension: 1024 },
+    { label: 'all-minilm (384维)', value: 'all-minilm', dimension: 384 },
+    { label: 'bge-m3 (1024维)', value: 'bge-m3', dimension: 1024 },
+  ],
+}
+
+/** 向量存储选项 */
+export const VECTOR_STORE_OPTIONS: { label: string; value: VectorStoreType; description: string }[] = [
+  { label: 'pgvector', value: 'pgvector', description: 'PostgreSQL + pgvector 扩展（默认，无需额外部署）' },
+  { label: 'Qdrant', value: 'qdrant', description: '高性能向量数据库（适合大规模检索）' },
+  { label: 'Milvus', value: 'milvus', description: '分布式向量数据库（适合亿级向量）' },
+]
+
 export interface KnowledgeBase {
   id: string
   name: string
   description?: string
   type?: string
+  embeddingProvider: EmbeddingProviderType
   embeddingModel: string
   embeddingDimension: number
+  vectorStore: VectorStoreType
   chunkSize: number
   chunkOverlap: number
   topK: number

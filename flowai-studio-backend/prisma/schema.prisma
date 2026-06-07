@@ -127,10 +127,15 @@ model KnowledgeBase {
   description String?
   
   // 嵌入模型配置
-  embeddingModel String @default("text-embedding-v3")
+  // Provider 类型: qwen / openai / ollama
+  embeddingProvider String @default("qwen")
+  embeddingModel    String @default("text-embedding-v3")
   
   // 向量维度 (根据模型不同而不同: text-embedding-v3=1024, text-embedding-v2=1536)
   embeddingDimension Int @default(1024)
+
+  // 向量存储后端: pgvector / qdrant / milvus
+  vectorStore String @default("pgvector")
   
   // 分块配置
   chunkSize     Int     @default(500)

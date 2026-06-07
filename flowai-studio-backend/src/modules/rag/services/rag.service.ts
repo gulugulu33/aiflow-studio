@@ -1,43 +1,62 @@
+/**
+ * RAG Service — 检索增强生成核心服务
+ *
+ * 重构说明 (Phase 2.1):
+ * - 将硬编码的 Qwen Embedding + pgvector 解耦为 EmbeddingProvider + VectorStore 抽象
+ * - 通过 EmbeddingFactory 和 VectorStoreFactory 动态创建实例
+ * - 每个知识库可使用不同的 Embedding Provider 和 VectorStore
+ * - 保留向后兼容：未配置时回退到默认 Provider（Qwen + pgvector）
+ *
+ * 竞品对标:
+ * - Dify: 支持 Qwen/OpenAI/Azure Embedding + pgvector/Qdrant/Milvus/Weaviate
+ * - FastGPT: 支持 Qwen/OpenAI/ChatGLM + MongoDB Atlas Vector
+ * - Coze: 仅支持内置模型
+ * - Flowise: 支持 OpenAI/HuggingFace/Cohere + Pinecone/Chroma/Qdrant/Weaviate
+ */
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../common/services/prisma.service';
 import { CreateKnowledgeBaseDto } from '../dto/create-kb.dto';
 import { UpdateKnowledgeBaseDto } from '../dto/update-kb.dto';
-import axios from 'axios';
-import { ConfigService } from '@nestjs/config';
+import { EmbeddingFactory } from '../factories/embedding.factory';
+import { VectorStoreFactory } from '../factories/vector-store.factory';
+import { EmbeddingProvider } from '../interfaces/embedding-provider.interface';
+import { VectorStore } from '../interfaces/vector-store.interface';
 import * as fs from 'fs';
 
 @Injectable()
 export class RAGService {
   private readonly logger = new Logger(RAGService.name);
-  private readonly embeddingApiKey: string;
-  private readonly embeddingBaseUrl: string;
-  private readonly embeddingModel: string;
-  private readonly embeddingDimension: number;
 
   constructor(
     private prisma: PrismaService,
-    private configService: ConfigService,
-  ) {
-    // 向量模型配置 — 优先使用独立的 Embedding API Key，否则回退到通用 API Key
-    this.embeddingApiKey =
-      this.configService.get<string>('QWEN_EMBEDDING_API_KEY') ||
-      this.configService.get<string>('QWEN_API_KEY')!;
-    this.embeddingBaseUrl = this.configService.get<string>('QWEN_BASE_URL')!;
-    this.embeddingModel = this.configService.get<string>('QWEN_EMBEDDING_MODEL')!;
-    this.embeddingDimension = this.configService.get<number>('QWEN_EMBEDDING_DIMENSION')!;
-  }
+    private embeddingFactory: EmbeddingFactory,
+    private vectorStoreFactory: VectorStoreFactory,
+  ) {}
 
   // ============================================================
   // 知识库管理
   // ============================================================
 
   async createKnowledgeBase(userId: string, createKnowledgeBaseDto: CreateKnowledgeBaseDto) {
-    return this.prisma.knowledgeBase.create({
+    const kb = await this.prisma.knowledgeBase.create({
       data: {
         ...createKnowledgeBaseDto,
         userId,
       },
     });
+
+    // 初始化向量存储后端（创建集合/索引）
+    try {
+      const store = this.getVectorStoreForKB(kb);
+      const provider = this.getEmbeddingProviderForKB(kb);
+      await store.initialize(kb.id, provider.getDimensions());
+    } catch (error) {
+      this.logger.warn(
+        `VectorStore initialization skipped for KB ${kb.id}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+
+    return kb;
   }
 
   async findKnowledgeBases(userId: string) {
@@ -75,7 +94,20 @@ export class RAGService {
 
   async deleteKnowledgeBase(userId: string, id: string) {
     await this.findKnowledgeBaseById(userId, id);
-    // 删除知识库
+
+    // 尝试从向量存储中删除对应集合
+    try {
+      const store = this.getDefaultVectorStore();
+      await store.deleteByFilter(id, {
+        match: { key: 'knowledgeBaseId', value: id },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `VectorStore cleanup skipped for KB ${id}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+
+    // 删除知识库（级联删除文档和分块）
     await this.prisma.document.deleteMany({ where: { knowledgeBaseId: id } });
     return this.prisma.knowledgeBase.delete({ where: { id } });
   }
@@ -153,38 +185,67 @@ export class RAGService {
   }
 
   /**
-   * 异步处理文档: 分块 → 生成向量 → 批量写入 pgvector
-   * 对标 Dify: 支持异步文档处理，避免上传接口阻塞
+   * 异步处理文档: 分块 → 生成向量 → 写入向量存储
+   *
+   * Phase 2.1 重构:
+   * - 使用 EmbeddingProvider 替代硬编码的 generateEmbedding
+   * - 使用 VectorStore.upsert 替代 prisma.batchInsertVectorChunks
+   * - 每个知识库使用各自的 Embedding/VectorStore 配置
    */
   private async processAndEmbedDocument(documentId: string, content: string, knowledgeBaseId: string): Promise<void> {
     // 获取知识库配置
     const kb = await this.prisma.knowledgeBase.findUnique({ where: { id: knowledgeBaseId } });
     if (!kb) throw new Error('Knowledge base not found');
 
+    // 根据知识库配置获取对应的 Provider 和 Store
+    const embeddingProvider = this.getEmbeddingProviderForKB(kb);
+    const vectorStore = this.getVectorStoreForKB(kb);
+
+    // 1. 文本分块
     const chunks = this.splitText(content, kb.chunkSize, kb.chunkOverlap);
 
-    // 批量生成向量
-    const chunksWithEmbeddings = await this.batchGenerateEmbeddings(chunks);
+    // 2. 批量生成向量
+    const batchResult = await embeddingProvider.embedBatch(chunks);
 
-    // 使用批量写入 — 比单条插入性能更优
-    await this.prisma.batchInsertVectorChunks({
-      documentId,
-      chunks: chunksWithEmbeddings.map((chunk, index) => ({
-        content: chunk.content,
-        embedding: chunk.embedding,
+    // 3. 写入向量存储
+    const documents = batchResult.results.map((result, index) => ({
+      id: `${documentId}_chunk_${index}`, // 生成稳定的 chunk ID
+      content: result.content,
+      embedding: result.embedding,
+      metadata: {
+        documentId,
+        knowledgeBaseId,
         chunkIndex: index,
         startIndex: 0,
-        endIndex: chunk.content.length,
+        endIndex: result.content.length,
+      },
+    }));
+
+    await vectorStore.upsert(knowledgeBaseId, documents);
+
+    // 4. 同时写入 document_chunks 表（保留兼容，方便 ORM 查询）
+    await this.prisma.batchInsertVectorChunks({
+      documentId,
+      chunks: batchResult.results.map((result, index) => ({
+        content: result.content,
+        embedding: result.embedding,
+        chunkIndex: index,
+        startIndex: 0,
+        endIndex: result.content.length,
       })),
     });
 
-    // 更新文档状态
+    // 5. 更新文档状态
     await this.prisma.document.update({
       where: { id: documentId },
       data: { status: 'completed' },
     });
 
-    this.logger.log(`Document ${documentId} processed: ${chunks.length} chunks embedded`);
+    this.logger.log(
+      `Document ${documentId} processed: ${chunks.length} chunks, ` +
+      `${batchResult.failedIndices.length} failed, ` +
+      `${batchResult.totalTokenUsage} tokens used`,
+    );
   }
 
   async getDocumentChunks(userId: string, documentId: string) {
@@ -237,145 +298,157 @@ export class RAGService {
       throw new BadRequestException('You do not have permission to delete this document');
     }
 
+    // 从向量存储中删除
+    try {
+      const store = this.getVectorStoreForKB(document.knowledgeBase);
+      await store.deleteByFilter(document.knowledgeBaseId, {
+        match: { key: 'documentId', value: documentId },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `VectorStore delete skipped for document ${documentId}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+
     await this.prisma.documentChunk.deleteMany({ where: { documentId } });
     return this.prisma.document.delete({ where: { id: documentId } });
   }
 
   // ============================================================
-  // 向量检索 — 使用 pgvector 替代内存计算
+  // 向量检索
   // ============================================================
 
   /**
-   * 基于 pgvector 的向量相似度检索
+   * 向量相似度检索
    *
-   * 优化对比（vs 旧版 SQLite + 内存计算）:
-   * - 旧版: 全量加载所有 chunk → 内存计算余弦相似度 → 排序 → 取 TopK
-   * - 新版: 数据库侧使用 <=> 操作符计算余弦距离 → 索引加速 → 直接返回 TopK
+   * Phase 2.1 重构:
+   * - 使用 EmbeddingProvider 生成查询向量
+   * - 使用 VectorStore.search 进行检索
+   * - 支持相似度阈值过滤和元数据过滤
    *
    * 竞品对标:
-   * - Dify: 支持 pgvector/Qdrant/Milvus/Weaviate/Pgvector
-   * - FastGPT: 使用 MongoDB Atlas Vector Search
+   * - Dify: 支持 pgvector/Qdrant/Milvus + 相似度阈值过滤
+   * - FastGPT: MongoDB Atlas Vector Search + 相似度阈值
    * - Coze: 自研向量引擎
    */
   async retrieve(query: string, knowledgeBaseId: string, topK: number = 5) {
-    // 1. 生成查询向量
-    const queryVector = await this.generateEmbedding(query);
-    if (!queryVector || queryVector.length === 0) {
-      this.logger.warn('Query embedding is empty, returning empty results');
-      return [];
-    }
-
-    // 2. 获取知识库配置
+    // 1. 获取知识库配置
     const kb = await this.prisma.knowledgeBase.findUnique({ where: { id: knowledgeBaseId } });
     if (!kb) {
       throw new NotFoundException('Knowledge base not found');
     }
 
-    // 3. 使用 pgvector 进行向量相似度搜索
-    // 使用 <=> 操作符 (余弦距离)，ORDER BY embedding <=> query 等价于按相似度降序
-    const results = await this.prisma.vectorSearch({
-      table: 'document_chunks',
-      queryVector,
-      matchFilter: `document_id IN (SELECT id FROM documents WHERE knowledge_base_id = '${knowledgeBaseId}')`,
-      limit: topK,
-      selectFields: ['document_id'],
+    // 2. 根据知识库配置获取 Provider 和 Store
+    const embeddingProvider = this.getEmbeddingProviderForKB(kb);
+    const vectorStore = this.getVectorStoreForKB(kb);
+
+    // 3. 生成查询向量
+    const embedResult = await embeddingProvider.embed(query);
+    if (!embedResult.embedding || embedResult.embedding.length === 0) {
+      this.logger.warn('Query embedding is empty, returning empty results');
+      return [];
+    }
+
+    // 4. 向量搜索
+    const searchResults = await vectorStore.search(knowledgeBaseId, {
+      queryVector: embedResult.embedding,
+      topK,
+      similarityThreshold: kb.similarityThreshold,
+      filter: {
+        match: { key: 'knowledgeBaseId', value: knowledgeBaseId },
+      },
     });
 
-    // 4. 补充文档名称信息
-    const documentIds = [...new Set(results.map((r: any) => r.document_id))];
-    const documents = await this.prisma.document.findMany({
-      where: { id: { in: documentIds } },
-      select: { id: true, name: true },
-    });
-    const docMap = new Map(documents.map((d) => [d.id, d.name]));
+    // 5. 补充文档名称信息
+    const documentIds = [...new Set(searchResults.map((r) => r.metadata?.documentId).filter(Boolean))];
+    let docMap = new Map<string, string>();
 
-    return results.map((row: any) => ({
-      id: row.id,
-      content: row.content,
-      documentId: row.document_id,
-      documentName: docMap.get(row.document_id) || 'Unknown',
-      similarity: Number(Number(row.similarity).toFixed(4)),
+    if (documentIds.length > 0) {
+      const documents = await this.prisma.document.findMany({
+        where: { id: { in: documentIds } },
+        select: { id: true, name: true },
+      });
+      docMap = new Map(documents.map((d) => [d.id, d.name]));
+    }
+
+    return searchResults.map((result) => ({
+      id: result.id,
+      content: result.content,
+      documentId: result.metadata?.documentId || '',
+      documentName: docMap.get(result.metadata?.documentId) || 'Unknown',
+      similarity: result.similarity,
     }));
   }
 
   // ============================================================
-  // 向量生成
+  // Provider / Store 解析
   // ============================================================
 
   /**
-   * 生成单个文本的向量嵌入
+   * 根据知识库配置获取对应的 EmbeddingProvider
+   *
+   * 策略:
+   * 1. 如果知识库指定了 embeddingProvider，使用指定 Provider
+   * 2. 否则使用默认 Provider（基于环境变量 EMBEDDING_PROVIDER）
+   *
+   * 竞品对标:
+   * - Dify: 每个知识库可选择不同的 Embedding 模型
+   * - FastGPT: 全局配置，所有知识库共用
+   * - 本设计: 支持每个知识库独立配置（更灵活）
    */
-  private async generateEmbedding(text: string): Promise<number[]> {
-    if (!this.embeddingApiKey || this.embeddingApiKey === 'your-qwen-api-key-here') {
-      this.logger.warn('Embedding API key not configured');
-      return [];
-    }
+  private getEmbeddingProviderForKB(kb: { embeddingProvider?: string; embeddingModel: string; embeddingDimension: number }): EmbeddingProvider {
+    // 优先使用知识库显式指定的 Provider，否则根据模型名推断
+    const providerType = kb.embeddingProvider || this.inferProviderType(kb.embeddingModel);
 
-    try {
-      const response = await axios.post(
-        `${this.embeddingBaseUrl}/embeddings`,
-        {
-          model: this.embeddingModel,
-          input: text,
-          dimensions: this.embeddingDimension,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.embeddingApiKey}`,
-          },
-          timeout: 30000,
-        },
-      );
-
-      return response.data.data[0].embedding;
-    } catch (error) {
-      this.logger.warn(`Embedding generation failed: ${error instanceof Error ? error.message : error}`);
-      return [];
-    }
+    return this.embeddingFactory.create(providerType, {
+      model: kb.embeddingModel,
+      dimensions: kb.embeddingDimension,
+    });
   }
 
   /**
-   * 批量生成向量嵌入
-   * 对标 Dify: 支持 batch embedding，减少 API 调用次数
+   * 根据知识库配置获取对应的 VectorStore
    *
-   * 优化点:
-   * - 并发控制: 同时最多 5 个请求，避免 API 限流
-   * - 失败重试: 单个分块失败不影响整体
-   * - 进度日志: 记录处理进度
+   * 策略:
+   * 1. 如果知识库指定了 vectorStore，使用指定存储
+   * 2. 否则使用默认 VectorStore（基于环境变量 VECTOR_STORE）
    */
-  private async batchGenerateEmbeddings(
-    chunks: string[],
-    concurrency: number = 5,
-  ): Promise<{ content: string; embedding: number[] }[]> {
-    const results: { content: string; embedding: number[] }[] = [];
+  private getVectorStoreForKB(kb: { vectorStore?: string }): VectorStore {
+    if (kb.vectorStore) {
+      return this.vectorStoreFactory.create(kb.vectorStore);
+    }
+    return this.vectorStoreFactory.getDefaultStore();
+  }
 
-    // 分批并发处理
-    for (let i = 0; i < chunks.length; i += concurrency) {
-      const batch = chunks.slice(i, i + concurrency);
-      const batchResults = await Promise.allSettled(
-        batch.map(async (chunk) => {
-          const embedding = await this.generateEmbedding(chunk);
-          return { content: chunk, embedding };
-        }),
-      );
+  /**
+   * 获取默认 VectorStore（用于无法获取知识库配置的场景）
+   */
+  private getDefaultVectorStore(): VectorStore {
+    return this.vectorStoreFactory.getDefaultStore();
+  }
 
-      for (const result of batchResults) {
-        if (result.status === 'fulfilled') {
-          results.push(result.value);
-        } else {
-          this.logger.warn(`Chunk embedding failed: ${result.reason}`);
-          // 降级: 保存无向量的分块
-          results.push({ content: batch[batchResults.indexOf(result)], embedding: [] });
-        }
-      }
-
-      if (chunks.length > concurrency) {
-        this.logger.log(`Embedding progress: ${Math.min(i + concurrency, chunks.length)}/${chunks.length}`);
-      }
+  /**
+   * 根据 embedding 模型名称推断 Provider 类型
+   */
+  private inferProviderType(model: string): string {
+    // Qwen 系列
+    if (model.startsWith('text-embedding-v')) {
+      return 'qwen';
     }
 
-    return results;
+    // OpenAI 系列
+    if (model.startsWith('text-embedding-3') || model.startsWith('text-embedding-ada')) {
+      return 'openai';
+    }
+
+    // Ollama 系列（常见模型名）
+    if (['nomic-embed-text', 'mxbai-embed-large', 'all-minilm', 'bge-m3'].includes(model)) {
+      return 'ollama';
+    }
+
+    // 默认回退到 Qwen
+    this.logger.warn(`Unknown embedding model: ${model}, falling back to qwen provider`);
+    return 'qwen';
   }
 
   // ============================================================
@@ -397,30 +470,5 @@ export class RAGService {
     }
 
     return chunks;
-  }
-
-  // ============================================================
-  // 兼容性方法（保留用于旧逻辑兼容）
-  // ============================================================
-
-  /**
-   * @deprecated 使用 pgvector 的 retrieve 方法替代
-   * 仅作为无 pgvector 时的降级方案
-   */
-  private cosineSimilarity(vecA: number[], vecB: number[]): number {
-    if (vecA.length !== vecB.length || vecA.length === 0) return 0;
-
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-
-    for (let i = 0; i < vecA.length; i++) {
-      dotProduct += vecA[i] * vecB[i];
-      normA += vecA[i] * vecA[i];
-      normB += vecB[i] * vecB[i];
-    }
-
-    const similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-    return isNaN(similarity) ? 0 : similarity;
   }
 }

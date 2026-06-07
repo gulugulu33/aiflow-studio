@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Input, Table, message, Modal, Upload, Space, Typography, Empty, Spin, Select, Slider, InputNumber, Divider } from 'antd'
+import { Button, Input, Table, message, Modal, Upload, Space, Typography, Empty, Spin, Select, Slider, InputNumber, Divider, Tag, Tooltip } from 'antd'
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -12,9 +12,11 @@ import {
   BlockOutlined,
   ArrowLeftOutlined,
   SettingOutlined,
+  CloudServerOutlined,
+  RobotOutlined,
 } from '@ant-design/icons'
 import { useStore } from '../store'
-import { DocumentChunk } from '../types'
+import { DocumentChunk, EmbeddingProviderType, VectorStoreType, EMBEDDING_MODELS, VECTOR_STORE_OPTIONS } from '../types'
 import './KnowledgeBase.css'
 
 const { Text } = Typography
@@ -41,8 +43,10 @@ const KnowledgeBase: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    embeddingProvider: 'qwen' as EmbeddingProviderType,
     embeddingModel: 'text-embedding-v3',
     embeddingDimension: 1024,
+    vectorStore: 'pgvector' as VectorStoreType,
     chunkSize: 500,
     chunkOverlap: 50,
     topK: 5,
@@ -63,17 +67,14 @@ const KnowledgeBase: React.FC = () => {
     [safeKnowledgeBases],
   )
 
-  const modelDimensionMap: Record<string, number[]> = {
-    'text-embedding-v1': [1536],
-    'text-embedding-v2': [1536],
-    'text-embedding-v3': [1024, 768, 512],
-  }
+  // Embedding 模型配置来自 types/index.ts 中的 EMBEDDING_MODELS 常量
 
   const handleAddKb = () => {
     setEditingKb(null)
     setFormData({
       name: '', description: '',
-      embeddingModel: 'text-embedding-v3', embeddingDimension: 1024,
+      embeddingProvider: 'qwen', embeddingModel: 'text-embedding-v3', embeddingDimension: 1024,
+      vectorStore: 'pgvector',
       chunkSize: 500, chunkOverlap: 50, topK: 5, similarityThreshold: 0.7,
       retrievalMode: 'vector',
     })
@@ -84,8 +85,10 @@ const KnowledgeBase: React.FC = () => {
     setEditingKb(kb)
     setFormData({
       name: kb.name, description: kb.description || '',
+      embeddingProvider: kb.embeddingProvider || 'qwen',
       embeddingModel: kb.embeddingModel || 'text-embedding-v3',
       embeddingDimension: kb.embeddingDimension || 1024,
+      vectorStore: kb.vectorStore || 'pgvector',
       chunkSize: kb.chunkSize || 500, chunkOverlap: kb.chunkOverlap || 50,
       topK: kb.topK || 5, similarityThreshold: kb.similarityThreshold || 0.7,
       retrievalMode: kb.retrievalMode || 'vector',
@@ -171,6 +174,36 @@ const KnowledgeBase: React.FC = () => {
       },
     },
     {
+      title: '向量配置', key: 'vectorConfig', width: 160,
+      render: (_: any, record: any) => {
+        const providerLabels: Record<string, string> = { qwen: 'Qwen', openai: 'OpenAI', ollama: 'Ollama' }
+        const storeLabels: Record<string, string> = { pgvector: 'pgvector', qdrant: 'Qdrant', milvus: 'Milvus' }
+        const provider = record.embeddingProvider || 'qwen'
+        const store = record.vectorStore || 'pgvector'
+        return (
+          <Space size={4}>
+            <Tag color="blue" style={{ fontSize: 11, margin: 0 }}>{providerLabels[provider] || provider}</Tag>
+            <Tag color="green" style={{ fontSize: 11, margin: 0 }}>{storeLabels[store] || store}</Tag>
+          </Space>
+        )
+      },
+    },
+    {
+      title: '向量配置', key: 'vectorConfig', width: 160,
+      render: (_: any, record: any) => {
+        const providerLabels: Record<string, string> = { qwen: 'Qwen', openai: 'OpenAI', ollama: 'Ollama' }
+        const storeLabels: Record<string, string> = { pgvector: 'pgvector', qdrant: 'Qdrant', milvus: 'Milvus' }
+        const provider = record.embeddingProvider || 'qwen'
+        const store = record.vectorStore || 'pgvector'
+        return (
+          <Space size={4}>
+            <Tag color="blue" style={{ fontSize: 11, margin: 0 }}>{providerLabels[provider] || provider}</Tag>
+            <Tag color="green" style={{ fontSize: 11, margin: 0 }}>{storeLabels[store] || store}</Tag>
+          </Space>
+        )
+      },
+    },
+    {
       title: '文档数量', key: 'documentCount', width: 90,
       render: (_: any, record: any) => <span className="kb-doc-count">{(record.documents || []).length} 份</span>,
     },
@@ -242,6 +275,34 @@ const KnowledgeBase: React.FC = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="kb-field">
+              <label className="kb-field-label"><RobotOutlined /> Embedding 服务</label>
+              <Select value={formData.embeddingProvider} onChange={(val: EmbeddingProviderType) => {
+                const models = EMBEDDING_MODELS[val]
+                const defaultModel = models[0]
+                setFormData({
+                  ...formData,
+                  embeddingProvider: val,
+                  embeddingModel: defaultModel.value,
+                  embeddingDimension: defaultModel.dimension,
+                })
+              }} style={{ width: '100%' }}
+                options={[
+                  { label: '通义千问 (Qwen)', value: 'qwen' },
+                  { label: 'OpenAI', value: 'openai' },
+                  { label: 'Ollama (本地)', value: 'ollama' },
+                ]}
+              />
+            </div>
+            <div className="kb-field">
+              <label className="kb-field-label"><CloudServerOutlined /> 向量存储</label>
+              <Select value={formData.vectorStore} onChange={(val: VectorStoreType) => setFormData({ ...formData, vectorStore: val })} style={{ width: '100%' }}
+                options={VECTOR_STORE_OPTIONS.map((opt) => ({
+                  label: <Tooltip title={opt.description}><span>{opt.label}</span></Tooltip>,
+                  value: opt.value,
+                }))}
+              />
+            </div>
+            <div className="kb-field">
               <label className="kb-field-label">检索模式</label>
               <Select value={formData.retrievalMode} onChange={(val) => setFormData({ ...formData, retrievalMode: val })} style={{ width: '100%' }}
                 options={[
@@ -254,20 +315,20 @@ const KnowledgeBase: React.FC = () => {
             <div className="kb-field">
               <label className="kb-field-label">Embedding 模型</label>
               <Select value={formData.embeddingModel} onChange={(val) => {
-                const dims = modelDimensionMap[val]?.[0] || 1024
-                setFormData({ ...formData, embeddingModel: val, embeddingDimension: dims })
+                const models = EMBEDDING_MODELS[formData.embeddingProvider]
+                const selected = models.find((m) => m.value === val)
+                setFormData({ ...formData, embeddingModel: val, embeddingDimension: selected?.dimension || 1024 })
               }} style={{ width: '100%' }}
-                options={[
-                  { label: 'text-embedding-v3 (推荐)', value: 'text-embedding-v3' },
-                  { label: 'text-embedding-v2', value: 'text-embedding-v2' },
-                  { label: 'text-embedding-v1', value: 'text-embedding-v1' },
-                ]}
+                options={EMBEDDING_MODELS[formData.embeddingProvider].map((m) => ({
+                  label: m.label,
+                  value: m.value,
+                }))}
               />
             </div>
             <div className="kb-field">
               <label className="kb-field-label">向量维度</label>
               <Select value={formData.embeddingDimension} onChange={(val) => setFormData({ ...formData, embeddingDimension: val })} style={{ width: '100%' }}
-                options={(modelDimensionMap[formData.embeddingModel] || [1024]).map((d) => ({ label: `${d}`, value: d }))}
+                options={[formData.embeddingDimension].map((d) => ({ label: `${d}`, value: d }))}
               />
             </div>
             <div className="kb-field">
