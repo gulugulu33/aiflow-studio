@@ -1,17 +1,19 @@
 /**
  * RAG Service — 检索增强生成核心服务
  *
- * 重构说明 (Phase 2.1):
- * - 将硬编码的 Qwen Embedding + pgvector 解耦为 EmbeddingProvider + VectorStore 抽象
- * - 通过 EmbeddingFactory 和 VectorStoreFactory 动态创建实例
- * - 每个知识库可使用不同的 Embedding Provider 和 VectorStore
- * - 保留向后兼容：未配置时回退到默认 Provider（Qwen + pgvector）
+ * 重构说明 (Phase 2.2):
+ * - 新增混合检索支持：vector / keyword / hybrid 三种检索模式
+ * - BM25 关键词检索基于 PostgreSQL 全文搜索（tsvector + tsquery）
+ * - 混合检索使用 RRF (Reciprocal Rank Fusion) 融合算法
+ * - 支持检索参数配置：vectorWeight、rrfK 等
+ * - 自适应降级：单路检索失败时仍可使用另一路结果
  *
  * 竞品对标:
- * - Dify: 支持 Qwen/OpenAI/Azure Embedding + pgvector/Qdrant/Milvus/Weaviate
- * - FastGPT: 支持 Qwen/OpenAI/ChatGLM + MongoDB Atlas Vector
- * - Coze: 仅支持内置模型
- * - Flowise: 支持 OpenAI/HuggingFace/Cohere + Pinecone/Chroma/Qdrant/Weaviate
+ * - Dify: 支持 vector / keyword / hybrid，hybrid 使用 RRF 融合
+ * - FastGPT: 支持 vector / fullText / hybrid，hybrid 使用权重融合
+ * - Coze: 仅支持向量检索
+ * - Flowise: 支持 vector + keyword 双路召回
+ * - 本设计: RRF 融合 + 加权 RRF + 自适应降级 + 中文分词支持
  */
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../common/services/prisma.service';
@@ -21,6 +23,13 @@ import { EmbeddingFactory } from '../factories/embedding.factory';
 import { VectorStoreFactory } from '../factories/vector-store.factory';
 import { EmbeddingProvider } from '../interfaces/embedding-provider.interface';
 import { VectorStore } from '../interfaces/vector-store.interface';
+import { VectorSearchFilter } from '../interfaces/vector-store.interface';
+import {
+  RetrievalRequest,
+  RetrievalResult,
+} from '../interfaces/retrieval-strategy.interface';
+import { BM25KeywordService } from './bm25-keyword.service';
+import { RRFFusionService } from './rrf-fusion.service';
 import * as fs from 'fs';
 
 @Injectable()
@@ -31,6 +40,8 @@ export class RAGService {
     private prisma: PrismaService,
     private embeddingFactory: EmbeddingFactory,
     private vectorStoreFactory: VectorStoreFactory,
+    private bm25Service: BM25KeywordService,
+    private rrfFusionService: RRFFusionService,
   ) {}
 
   // ============================================================
@@ -53,6 +64,15 @@ export class RAGService {
     } catch (error) {
       this.logger.warn(
         `VectorStore initialization skipped for KB ${kb.id}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+
+    // 初始化全文搜索索引
+    try {
+      await this.bm25Service.ensureFullTextIndex();
+    } catch (error) {
+      this.logger.warn(
+        `Full-text index initialization skipped for KB ${kb.id}: ${error instanceof Error ? error.message : error}`,
       );
     }
 
@@ -187,10 +207,9 @@ export class RAGService {
   /**
    * 异步处理文档: 分块 → 生成向量 → 写入向量存储
    *
-   * Phase 2.1 重构:
-   * - 使用 EmbeddingProvider 替代硬编码的 generateEmbedding
-   * - 使用 VectorStore.upsert 替代 prisma.batchInsertVectorChunks
-   * - 每个知识库使用各自的 Embedding/VectorStore 配置
+   * Phase 2.2 增强:
+   * - 写入 document_chunks 时同时保留全文索引
+   * - 全文搜索基于 document_chunks.content 列的 tsvector 索引
    */
   private async processAndEmbedDocument(documentId: string, content: string, knowledgeBaseId: string): Promise<void> {
     // 获取知识库配置
@@ -232,6 +251,11 @@ export class RAGService {
         chunkIndex: index,
         startIndex: 0,
         endIndex: result.content.length,
+        metadata: JSON.stringify({
+          documentId,
+          knowledgeBaseId,
+          chunkIndex: index,
+        }),
       })),
     });
 
@@ -315,41 +339,74 @@ export class RAGService {
   }
 
   // ============================================================
-  // 向量检索
+  // 检索（核心 — Phase 2.2 重构）
   // ============================================================
 
   /**
-   * 向量相似度检索
+   * 统一检索入口
    *
-   * Phase 2.1 重构:
-   * - 使用 EmbeddingProvider 生成查询向量
-   * - 使用 VectorStore.search 进行检索
-   * - 支持相似度阈值过滤和元数据过滤
+   * 根据知识库的 retrievalMode 配置选择检索策略:
+   * - vector: 纯向量检索（语义匹配）
+   * - keyword: 纯关键词检索（精确匹配）
+   * - hybrid: 混合检索（向量 + 关键词 RRF 融合）
    *
    * 竞品对标:
-   * - Dify: 支持 pgvector/Qdrant/Milvus + 相似度阈值过滤
-   * - FastGPT: MongoDB Atlas Vector Search + 相似度阈值
-   * - Coze: 自研向量引擎
+   * - Dify: 支持 vector / keyword / hybrid，hybrid 使用 RRF
+   * - FastGPT: 支持 vector / fullText / hybrid
+   * - Coze: 仅向量检索
+   *
+   * 本设计优势:
+   * - 自适应降级：向量检索失败时自动降级为关键词检索
+   * - 并行双路检索（hybrid 模式）：减少延迟
+   * - 保留各路原始分数（便于调试和 rerank）
    */
-  async retrieve(query: string, knowledgeBaseId: string, topK: number = 5) {
+  async retrieve(
+    query: string,
+    knowledgeBaseId: string,
+    topK?: number,
+    retrievalModeOverride?: 'vector' | 'keyword' | 'hybrid',
+    vectorWeightOverride?: number,
+    rrfKOverride?: number,
+  ): Promise<any[]> {
     // 1. 获取知识库配置
     const kb = await this.prisma.knowledgeBase.findUnique({ where: { id: knowledgeBaseId } });
     if (!kb) {
       throw new NotFoundException('Knowledge base not found');
     }
 
-    // 2. 根据知识库配置获取 Provider 和 Store
+    const effectiveTopK = topK || kb.topK || 5;
+    // 运行时参数优先于知识库配置
+    const retrievalMode = retrievalModeOverride || (kb as any).retrievalMode || 'vector';
+    const vectorWeight = vectorWeightOverride ?? (kb as any).vectorWeight ?? 0.7;
+    const rrfK = rrfKOverride ?? (kb as any).rrfK ?? 60;
+
+    // 2. 根据检索模式执行检索
+    switch (retrievalMode) {
+      case 'keyword':
+        return this.retrieveKeyword(query, knowledgeBaseId, effectiveTopK, kb);
+      case 'hybrid':
+        return this.retrieveHybrid(query, knowledgeBaseId, effectiveTopK, kb, vectorWeight, rrfK);
+      case 'vector':
+      default:
+        return this.retrieveVector(query, knowledgeBaseId, effectiveTopK, kb);
+    }
+  }
+
+  /**
+   * 纯向量检索
+   */
+  private async retrieveVector(query: string, knowledgeBaseId: string, topK: number, kb: any): Promise<any[]> {
     const embeddingProvider = this.getEmbeddingProviderForKB(kb);
     const vectorStore = this.getVectorStoreForKB(kb);
 
-    // 3. 生成查询向量
+    // 生成查询向量
     const embedResult = await embeddingProvider.embed(query);
     if (!embedResult.embedding || embedResult.embedding.length === 0) {
       this.logger.warn('Query embedding is empty, returning empty results');
       return [];
     }
 
-    // 4. 向量搜索
+    // 向量搜索
     const searchResults = await vectorStore.search(knowledgeBaseId, {
       queryVector: embedResult.embedding,
       topK,
@@ -359,8 +416,208 @@ export class RAGService {
       },
     });
 
-    // 5. 补充文档名称信息
-    const documentIds = [...new Set(searchResults.map((r) => r.metadata?.documentId).filter(Boolean))];
+    // 补充文档名称信息
+    return this.enrichResultsWithDocNames(searchResults);
+  }
+
+  /**
+   * 纯关键词检索（BM25）
+   */
+  private async retrieveKeyword(query: string, knowledgeBaseId: string, topK: number, kb: any): Promise<any[]> {
+    const results = await this.bm25Service.search({
+      query,
+      knowledgeBaseId,
+      topK,
+    });
+
+    // 补充文档名称信息
+    return this.enrichResultsWithDocNames(
+      results.map((r) => ({
+        id: r.id,
+        content: r.content,
+        similarity: r.score,
+        metadata: r.metadata,
+      }))
+    );
+  }
+
+  /**
+   * 混合检索（向量 + 关键词 RRF 融合）
+   *
+   * 流程:
+   * 1. 并行执行向量检索和关键词检索
+   * 2. 使用 RRF 融合两路结果
+   * 3. 返回融合后的排序结果
+   *
+   * 自适应降级:
+   * - 向量检索失败时，仅使用关键词检索结果
+   * - 关键词检索失败时，仅使用向量检索结果
+   * - 两路都失败时，返回空结果
+   */
+  private async retrieveHybrid(
+    query: string,
+    knowledgeBaseId: string,
+    topK: number,
+    kb: any,
+    vectorWeight: number = 0.7,
+    rrfK: number = 60,
+  ): Promise<any[]> {
+
+    // 并行执行双路检索
+    const [vectorResults, keywordResults] = await Promise.allSettled([
+      // 向量检索
+      this.retrieveVectorForHybrid(query, knowledgeBaseId, topK, kb),
+      // 关键词检索（多取一些，因为融合后可能部分重叠）
+      this.retrieveKeywordForHybrid(query, knowledgeBaseId, topK * 2),
+    ]);
+
+    // 处理检索结果（自适应降级）
+    const vResults: RetrievalResult[] =
+      vectorResults.status === 'fulfilled' ? vectorResults.value : [];
+    const kResults: RetrievalResult[] =
+      keywordResults.status === 'fulfilled' ? keywordResults.value : [];
+
+    // 日志记录降级情况
+    if (vectorResults.status === 'rejected') {
+      this.logger.warn(
+        `Vector search failed in hybrid mode, falling back to keyword only: ` +
+        `${vectorResults.reason}`
+      );
+    }
+    if (keywordResults.status === 'rejected') {
+      this.logger.warn(
+        `Keyword search failed in hybrid mode, falling back to vector only: ` +
+        `${keywordResults.reason}`
+      );
+    }
+
+    // 单路降级
+    if (vResults.length === 0 && kResults.length === 0) {
+      return [];
+    }
+    if (vResults.length === 0) {
+      return this.enrichResultsWithDocNames(
+        kResults.map((r) => ({ id: r.id, content: r.content, similarity: r.score, metadata: r.metadata }))
+      );
+    }
+    if (kResults.length === 0) {
+      return this.enrichResultsWithDocNames(
+        vResults.map((r) => ({ id: r.id, content: r.content, similarity: r.score, metadata: r.metadata }))
+      );
+    }
+
+    // RRF 融合
+    const fusedResults = this.rrfFusionService.fuse(
+      [
+        { name: 'vector', results: vResults, weight: vectorWeight },
+        { name: 'keyword', results: kResults, weight: 1 - vectorWeight },
+      ],
+      {
+        k: rrfK,
+        topK,
+        similarityThreshold: kb.similarityThreshold,
+      },
+    );
+
+    // 日志融合质量分析
+    const analysis = this.rrfFusionService.analyzeFusion(fusedResults);
+    this.logger.debug(
+      `Hybrid retrieval analysis: dualHit=${analysis.dualHitCount}, ` +
+      `vectorOnly=${analysis.vectorOnlyCount}, keywordOnly=${analysis.keywordOnlyCount}, ` +
+      `avgScore=${analysis.avgScore.toFixed(3)}`
+    );
+
+    // 补充文档名称信息
+    return this.enrichResultsWithDocNames(
+      fusedResults.map((r) => ({
+        id: r.id,
+        content: r.content,
+        similarity: r.score,
+        metadata: r.metadata,
+        // 混合检索附加信息
+        vectorScore: r.vectorScore,
+        keywordScore: r.keywordScore,
+        vectorRank: r.vectorRank,
+        keywordRank: r.keywordRank,
+      }))
+    );
+  }
+
+  /**
+   * 为混合检索执行向量检索（返回 RetrievalResult 格式）
+   */
+  private async retrieveVectorForHybrid(
+    query: string,
+    knowledgeBaseId: string,
+    topK: number,
+    kb: any,
+  ): Promise<RetrievalResult[]> {
+    const embeddingProvider = this.getEmbeddingProviderForKB(kb);
+    const vectorStore = this.getVectorStoreForKB(kb);
+
+    const embedResult = await embeddingProvider.embed(query);
+    if (!embedResult.embedding || embedResult.embedding.length === 0) {
+      return [];
+    }
+
+    const searchResults = await vectorStore.search(knowledgeBaseId, {
+      queryVector: embedResult.embedding,
+      topK,
+      similarityThreshold: kb.similarityThreshold,
+      filter: {
+        match: { key: 'knowledgeBaseId', value: knowledgeBaseId },
+      },
+    });
+
+    return searchResults.map((r) => ({
+      id: r.id,
+      content: r.content,
+      score: r.similarity,
+      source: 'vector' as const,
+      metadata: r.metadata,
+    }));
+  }
+
+  /**
+   * 为混合检索执行关键词检索（返回 RetrievalResult 格式）
+   */
+  private async retrieveKeywordForHybrid(
+    query: string,
+    knowledgeBaseId: string,
+    topK: number,
+  ): Promise<RetrievalResult[]> {
+    const results = await this.bm25Service.search({
+      query,
+      knowledgeBaseId,
+      topK,
+    });
+
+    return results.map((r) => ({
+      id: r.id,
+      content: r.content,
+      score: r.score,
+      source: 'keyword' as const,
+      metadata: r.metadata,
+    }));
+  }
+
+  // ============================================================
+  // 结果增强
+  // ============================================================
+
+  /**
+   * 补充文档名称信息
+   */
+  private async enrichResultsWithDocNames(
+    results: Array<{
+      id: string;
+      content: string;
+      similarity: number;
+      metadata?: Record<string, any>;
+      [key: string]: any;
+    }>,
+  ): Promise<any[]> {
+    const documentIds = [...new Set(results.map((r) => r.metadata?.documentId).filter(Boolean))];
     let docMap = new Map<string, string>();
 
     if (documentIds.length > 0) {
@@ -371,12 +628,17 @@ export class RAGService {
       docMap = new Map(documents.map((d) => [d.id, d.name]));
     }
 
-    return searchResults.map((result) => ({
+    return results.map((result) => ({
       id: result.id,
       content: result.content,
       documentId: result.metadata?.documentId || '',
       documentName: docMap.get(result.metadata?.documentId) || 'Unknown',
       similarity: result.similarity,
+      // 混合检索附加字段
+      ...(result.vectorScore !== undefined ? { vectorScore: result.vectorScore } : {}),
+      ...(result.keywordScore !== undefined ? { keywordScore: result.keywordScore } : {}),
+      ...(result.vectorRank !== undefined ? { vectorRank: result.vectorRank } : {}),
+      ...(result.keywordRank !== undefined ? { keywordRank: result.keywordRank } : {}),
     }));
   }
 
@@ -386,18 +648,8 @@ export class RAGService {
 
   /**
    * 根据知识库配置获取对应的 EmbeddingProvider
-   *
-   * 策略:
-   * 1. 如果知识库指定了 embeddingProvider，使用指定 Provider
-   * 2. 否则使用默认 Provider（基于环境变量 EMBEDDING_PROVIDER）
-   *
-   * 竞品对标:
-   * - Dify: 每个知识库可选择不同的 Embedding 模型
-   * - FastGPT: 全局配置，所有知识库共用
-   * - 本设计: 支持每个知识库独立配置（更灵活）
    */
   private getEmbeddingProviderForKB(kb: { embeddingProvider?: string; embeddingModel: string; embeddingDimension: number }): EmbeddingProvider {
-    // 优先使用知识库显式指定的 Provider，否则根据模型名推断
     const providerType = kb.embeddingProvider || this.inferProviderType(kb.embeddingModel);
 
     return this.embeddingFactory.create(providerType, {
@@ -408,10 +660,6 @@ export class RAGService {
 
   /**
    * 根据知识库配置获取对应的 VectorStore
-   *
-   * 策略:
-   * 1. 如果知识库指定了 vectorStore，使用指定存储
-   * 2. 否则使用默认 VectorStore（基于环境变量 VECTOR_STORE）
    */
   private getVectorStoreForKB(kb: { vectorStore?: string }): VectorStore {
     if (kb.vectorStore) {
@@ -431,22 +679,15 @@ export class RAGService {
    * 根据 embedding 模型名称推断 Provider 类型
    */
   private inferProviderType(model: string): string {
-    // Qwen 系列
     if (model.startsWith('text-embedding-v')) {
       return 'qwen';
     }
-
-    // OpenAI 系列
     if (model.startsWith('text-embedding-3') || model.startsWith('text-embedding-ada')) {
       return 'openai';
     }
-
-    // Ollama 系列（常见模型名）
     if (['nomic-embed-text', 'mxbai-embed-large', 'all-minilm', 'bge-m3'].includes(model)) {
       return 'ollama';
     }
-
-    // 默认回退到 Qwen
     this.logger.warn(`Unknown embedding model: ${model}, falling back to qwen provider`);
     return 'qwen';
   }
@@ -457,7 +698,7 @@ export class RAGService {
 
   /**
    * 文本分块
-   * TODO: Phase 2 会增强为支持自动分块、父子分块、语义分块
+   * TODO: Phase 2.3 会增强为支持自动分块、父子分块、语义分块
    */
   private splitText(text: string, chunkSize: number, overlap: number): string[] {
     const chunks: string[] = [];

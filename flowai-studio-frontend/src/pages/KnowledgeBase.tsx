@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Input, Table, message, Modal, Upload, Space, Typography, Empty, Spin, Select, Slider, InputNumber, Divider, Tag, Tooltip } from 'antd'
+import { Button, Input, Table, message, Modal, Upload, Space, Typography, Empty, Spin, Select, Slider, InputNumber, Divider, Tag, Tooltip, Collapse } from 'antd'
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -14,9 +14,12 @@ import {
   SettingOutlined,
   CloudServerOutlined,
   RobotOutlined,
+  SearchOutlined,
+  ExperimentOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons'
 import { useStore } from '../store'
-import { DocumentChunk, EmbeddingProviderType, VectorStoreType, EMBEDDING_MODELS, VECTOR_STORE_OPTIONS } from '../types'
+import { DocumentChunk, EmbeddingProviderType, VectorStoreType, EMBEDDING_MODELS, VECTOR_STORE_OPTIONS, RETRIEVAL_MODE_OPTIONS } from '../types'
 import './KnowledgeBase.css'
 
 const { Text } = Typography
@@ -51,7 +54,9 @@ const KnowledgeBase: React.FC = () => {
     chunkOverlap: 50,
     topK: 5,
     similarityThreshold: 0.7,
-    retrievalMode: 'vector',
+    retrievalMode: 'vector' as 'vector' | 'keyword' | 'hybrid',
+    vectorWeight: 0.7,
+    rrfK: 60,
   })
   const [documents, setDocuments] = useState<any[]>([])
   const [chunkModalVisible, setChunkModalVisible] = useState(false)
@@ -76,7 +81,9 @@ const KnowledgeBase: React.FC = () => {
       embeddingProvider: 'qwen', embeddingModel: 'text-embedding-v3', embeddingDimension: 1024,
       vectorStore: 'pgvector',
       chunkSize: 500, chunkOverlap: 50, topK: 5, similarityThreshold: 0.7,
-      retrievalMode: 'vector',
+      retrievalMode: 'vector' as 'vector' | 'keyword' | 'hybrid',
+    vectorWeight: 0.7,
+    rrfK: 60,
     })
     setModalVisible(true)
   }
@@ -92,6 +99,8 @@ const KnowledgeBase: React.FC = () => {
       chunkSize: kb.chunkSize || 500, chunkOverlap: kb.chunkOverlap || 50,
       topK: kb.topK || 5, similarityThreshold: kb.similarityThreshold || 0.7,
       retrievalMode: kb.retrievalMode || 'vector',
+      vectorWeight: kb.vectorWeight ?? 0.7,
+      rrfK: kb.rrfK ?? 60,
     })
     setModalVisible(true)
   }
@@ -162,30 +171,10 @@ const KnowledgeBase: React.FC = () => {
       ),
     },
     {
-      title: '检索模式', dataIndex: 'retrievalMode', key: 'retrievalMode', width: 100,
+      title: '检索模式', dataIndex: 'retrievalMode', key: 'retrievalMode', width: 110,
       render: (mode: string) => {
-        const modeMap: Record<string, { label: string; color: string }> = {
-          vector: { label: '向量', color: '#1677ff' },
-          keyword: { label: '关键词', color: '#52c41a' },
-          hybrid: { label: '混合', color: '#722ed1' },
-        }
-        const m = modeMap[mode] || modeMap.vector
-        return <span style={{ color: m.color, fontWeight: 500 }}>{m.label}</span>
-      },
-    },
-    {
-      title: '向量配置', key: 'vectorConfig', width: 160,
-      render: (_: any, record: any) => {
-        const providerLabels: Record<string, string> = { qwen: 'Qwen', openai: 'OpenAI', ollama: 'Ollama' }
-        const storeLabels: Record<string, string> = { pgvector: 'pgvector', qdrant: 'Qdrant', milvus: 'Milvus' }
-        const provider = record.embeddingProvider || 'qwen'
-        const store = record.vectorStore || 'pgvector'
-        return (
-          <Space size={4}>
-            <Tag color="blue" style={{ fontSize: 11, margin: 0 }}>{providerLabels[provider] || provider}</Tag>
-            <Tag color="green" style={{ fontSize: 11, margin: 0 }}>{storeLabels[store] || store}</Tag>
-          </Space>
-        )
+        const opt = RETRIEVAL_MODE_OPTIONS.find((o) => o.value === mode) || RETRIEVAL_MODE_OPTIONS[0]
+        return <Tag color={opt.color === '#1677ff' ? 'blue' : opt.color === '#52c41a' ? 'green' : 'purple'} style={{ margin: 0 }}>{opt.label}</Tag>
       },
     },
     {
@@ -303,13 +292,12 @@ const KnowledgeBase: React.FC = () => {
               />
             </div>
             <div className="kb-field">
-              <label className="kb-field-label">检索模式</label>
-              <Select value={formData.retrievalMode} onChange={(val) => setFormData({ ...formData, retrievalMode: val })} style={{ width: '100%' }}
-                options={[
-                  { label: '向量检索', value: 'vector' },
-                  { label: '关键词检索', value: 'keyword' },
-                  { label: '混合检索', value: 'hybrid' },
-                ]}
+              <label className="kb-field-label"><SearchOutlined /> 检索模式</label>
+              <Select value={formData.retrievalMode} onChange={(val: 'vector' | 'keyword' | 'hybrid') => setFormData({ ...formData, retrievalMode: val })} style={{ width: '100%' }}
+                options={RETRIEVAL_MODE_OPTIONS.map((opt) => ({
+                  label: <Tooltip title={opt.description}><span style={{ color: opt.color }}>{opt.label}</span></Tooltip>,
+                  value: opt.value,
+                }))}
               />
             </div>
             <div className="kb-field">
@@ -347,6 +335,33 @@ const KnowledgeBase: React.FC = () => {
               <label className="kb-field-label">相似度阈值: {formData.similarityThreshold}</label>
               <Slider value={formData.similarityThreshold} onChange={(val) => setFormData({ ...formData, similarityThreshold: val })} min={0} max={1} step={0.05} marks={{ 0: '0', 0.5: '0.5', 0.7: '0.7', 1: '1.0' }} />
             </div>
+            {formData.retrievalMode === 'hybrid' && (
+              <>
+                <div className="kb-field" style={{ gridColumn: '1 / -1' }}>
+                  <Divider orientation="left" style={{ fontSize: 12, color: 'var(--c-text-secondary)', margin: '8px 0' }}>
+                    <ExperimentOutlined /> 混合检索配置
+                  </Divider>
+                </div>
+                <div className="kb-field">
+                  <label className="kb-field-label">
+                    向量检索权重: {formData.vectorWeight}
+                    <Tooltip title="向量检索在融合中的权重，关键词权重 = 1 - 向量权重。默认 0.7 偏向语义匹配。">
+                      <InfoCircleOutlined style={{ marginLeft: 4, fontSize: 12, color: 'var(--c-text-tertiary)' }} />
+                    </Tooltip>
+                  </label>
+                  <Slider value={formData.vectorWeight} onChange={(val) => setFormData({ ...formData, vectorWeight: val })} min={0} max={1} step={0.05} marks={{ 0: '关键词', 0.5: '均衡', 0.7: '0.7', 1: '向量' }} />
+                </div>
+                <div className="kb-field">
+                  <label className="kb-field-label">
+                    RRF 常数 K: {formData.rrfK}
+                    <Tooltip title="Reciprocal Rank Fusion 常数，增大则低排名结果影响增大（更平等），减小则偏向头部。学术推荐值 60。">
+                      <InfoCircleOutlined style={{ marginLeft: 4, fontSize: 12, color: 'var(--c-text-tertiary)' }} />
+                    </Tooltip>
+                  </label>
+                  <Slider value={formData.rrfK} onChange={(val) => setFormData({ ...formData, rrfK: val })} min={1} max={200} step={1} marks={{ 1: '1', 60: '60', 100: '100', 200: '200' }} />
+                </div>
+              </>
+            )}
           </div>
         </div>
       </Modal>

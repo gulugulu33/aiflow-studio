@@ -3,16 +3,17 @@ import { IsString, IsOptional, IsNumber, IsIn, Min, Max } from 'class-validator'
 /**
  * 创建知识库 DTO
  *
- * Phase 2.1 增强:
- * - 新增 embeddingProvider 字段: 支持选择 Qwen/OpenAI/Ollama
- * - 新增 vectorStore 字段: 支持选择 pgvector/Qdrant/Milvus
- * - 扩展 embeddingModel 可选值: 支持 Qwen + OpenAI + Ollama 模型
- * - 扩展 embeddingDimension 可选值: 支持 384/768/1024/1536/3072
+ * Phase 2.2 增强:
+ * - 新增 retrievalMode 字段: 支持 vector / keyword / hybrid 三种检索模式
+ * - 新增 vectorWeight 字段: 混合检索中向量检索权重（默认 0.7）
+ * - 新增 rrfK 字段: RRF 融合常数（默认 60）
+ * - 扩展 similarityThreshold: 混合检索中也适用
  *
  * 竞品对标:
- * - Dify: 每个知识库可选择 Embedding 模型和向量数据库
- * - FastGPT: 全局配置
- * - 本设计: 每个知识库独立配置（更灵活）
+ * - Dify: 支持 vector / keyword / hybrid 检索模式，hybrid 支持 RRF 融合
+ * - FastGPT: 支持 vector / fullText / hybrid，hybrid 使用权重融合
+ * - Coze: 仅向量检索
+ * - 本设计: RRF 融合 + 加权 RRF + 自适应降级
  */
 export class CreateKnowledgeBaseDto {
   @IsString({ message: 'Name must be a string' })
@@ -96,10 +97,51 @@ export class CreateKnowledgeBaseDto {
   @Max(1, { message: 'Similarity threshold must not exceed 1' })
   similarityThreshold?: number;
 
+  /**
+   * 检索模式
+   * - vector: 纯向量检索（语义匹配，适合同义词/语义关联场景）
+   * - keyword: 纯关键词检索（BM25，适合精确匹配/专有名词/编号场景）
+   * - hybrid: 混合检索（向量 + 关键词 RRF 融合，推荐生产使用）
+   *
+   * 竞品对标:
+   * - Dify: 支持 vector / keyword / hybrid
+   * - FastGPT: 支持 vector / fullText / hybrid
+   * - Coze: 仅 vector
+   */
   @IsOptional()
   @IsString({ message: 'Retrieval mode must be a string' })
   @IsIn(['vector', 'keyword', 'hybrid'], {
     message: 'Retrieval mode must be vector, keyword, or hybrid',
   })
   retrievalMode?: string;
+
+  /**
+   * 混合检索中向量检索权重（0-1）
+   * 关键词权重 = 1 - vectorWeight
+   * 默认 0.7（偏向向量检索，因为语义匹配通常更重要）
+   *
+   * 竞品对标:
+   * - Dify: 支持调整向量/关键词权重
+   * - FastGPT: 支持自定义权重
+   * - 本设计: 默认 0.7/0.3，用户可调
+   */
+  @IsOptional()
+  @IsNumber({}, { message: 'Vector weight must be a number' })
+  @Min(0, { message: 'Vector weight must be at least 0' })
+  @Max(1, { message: 'Vector weight must not exceed 1' })
+  vectorWeight?: number;
+
+  /**
+   * RRF 融合常数 K
+   * 增大 K → 低排名结果影响增大（更平等）
+   * 减小 K → 高排名结果影响增大（更偏向头部）
+   * 默认 60（学术推荐值）
+   *
+   * 参考文献: Cormack et al. (2009) SIGIR
+   */
+  @IsOptional()
+  @IsNumber({}, { message: 'RRF K must be a number' })
+  @Min(1, { message: 'RRF K must be at least 1' })
+  @Max(200, { message: 'RRF K must not exceed 200' })
+  rrfK?: number;
 }

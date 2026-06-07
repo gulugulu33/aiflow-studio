@@ -162,11 +162,20 @@ export interface KnowledgeBase {
   topK: number
   similarityThreshold: number
   retrievalMode: 'vector' | 'keyword' | 'hybrid'
+  vectorWeight: number
+  rrfK: number
   userId: string
   createdAt: string
   updatedAt: string
   documents?: Document[]
 }
+
+/** 检索模式选项 */
+export const RETRIEVAL_MODE_OPTIONS: { label: string; value: KnowledgeBase['retrievalMode']; description: string; color: string }[] = [
+  { label: '向量检索', value: 'vector', description: '语义匹配，适合同义词、语义关联场景', color: '#1677ff' },
+  { label: '关键词检索', value: 'keyword', description: 'BM25 精确匹配，适合专有名词、编号场景', color: '#52c41a' },
+  { label: '混合检索', value: 'hybrid', description: '向量+关键词 RRF 融合，推荐生产使用', color: '#722ed1' },
+]
 
 export interface Document {
   id: string

@@ -148,6 +148,12 @@ model KnowledgeBase {
   // 检索模式: vector(纯向量), keyword(纯关键词), hybrid(混合)
   retrievalMode String @default("vector")
   
+  // 混合检索配置 (Phase 2.2)
+  // 向量检索权重 (0-1, 关键词权重 = 1 - vectorWeight)
+  vectorWeight Float @default(0.7)
+  // RRF 融合常数 K (学术推荐值 60)
+  rrfK Int @default(60)
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

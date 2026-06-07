@@ -89,13 +89,35 @@ export class RAGController {
     return this.ragService.deleteDocument(userId, documentId);
   }
 
-  // 检索
+  /**
+   * 统一检索接口
+   *
+   * Phase 2.2 增强:
+   * - 支持三种检索模式: vector / keyword / hybrid
+   * - hybrid 模式使用 RRF 融合向量+关键词结果
+   * - 支持检索参数覆盖: topK, retrievalMode, vectorWeight, rrfK
+   *
+   * 竞品对标:
+   * - Dify: POST /datasets/{id}/retrieve 支持检索模式选择
+   * - FastGPT: POST /api/core/dataset/searchTest
+   * - 本设计: 支持运行时覆盖检索参数（更灵活）
+   */
   @Post('retrieve')
   retrieve(
     @Body('query') query: string,
     @Body('knowledgeBaseId') knowledgeBaseId: string,
-    @Body('topK') topK: number = 5,
+    @Body('topK') topK?: number,
+    @Body('retrievalMode') retrievalMode?: 'vector' | 'keyword' | 'hybrid',
+    @Body('vectorWeight') vectorWeight?: number,
+    @Body('rrfK') rrfK?: number,
   ) {
-    return this.ragService.retrieve(query, knowledgeBaseId, topK);
+    return this.ragService.retrieve(
+      query,
+      knowledgeBaseId,
+      topK,
+      retrievalMode,
+      vectorWeight,
+      rrfK,
+    );
   }
 }
