@@ -119,6 +119,13 @@ export interface KnowledgeBase {
   name: string
   description?: string
   type?: string
+  embeddingModel: string
+  embeddingDimension: number
+  chunkSize: number
+  chunkOverlap: number
+  topK: number
+  similarityThreshold: number
+  retrievalMode: 'vector' | 'keyword' | 'hybrid'
   userId: string
   createdAt: string
   updatedAt: string

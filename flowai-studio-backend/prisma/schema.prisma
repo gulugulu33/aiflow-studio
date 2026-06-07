@@ -3,9 +3,13 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ============================================================
+// 用户与权限
+// ============================================================
 
 // 用户表
 model User {
@@ -25,6 +29,10 @@ model User {
 
   @@map("users")
 }
+
+// ============================================================
+// 应用管理
+// ============================================================
 
 // 应用表
 model Application {
@@ -46,6 +54,10 @@ model Application {
 
   @@map("applications")
 }
+
+// ============================================================
+// 工作流
+// ============================================================
 
 // 工作流配置表
 model Workflow {
@@ -104,6 +116,10 @@ model WorkflowExecution {
   @@map("workflow_executions")
 }
 
+// ============================================================
+// RAG 知识库
+// ============================================================
+
 // 知识库表
 model KnowledgeBase {
   id          String  @id @default(uuid())
@@ -111,7 +127,10 @@ model KnowledgeBase {
   description String?
   
   // 嵌入模型配置
-  embeddingModel String @default("text-embedding-v2")
+  embeddingModel String @default("text-embedding-v3")
+  
+  // 向量维度 (根据模型不同而不同: text-embedding-v3=1024, text-embedding-v2=1536)
+  embeddingDimension Int @default(1024)
   
   // 分块配置
   chunkSize     Int     @default(500)
@@ -120,6 +139,9 @@ model KnowledgeBase {
   // 检索配置
   topK              Int     @default(5)
   similarityThreshold Float @default(0.7)
+  
+  // 检索模式: vector(纯向量), keyword(纯关键词), hybrid(混合)
+  retrievalMode String @default("vector")
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -155,13 +177,14 @@ model Document {
   @@map("documents")
 }
 
-// 文档分块表 (向量存储)
+// 文档分块表 (向量存储 — 使用 pgvector)
 model DocumentChunk {
   id      String @id @default(uuid())
   content String
   
-  // 向量数据 (以JSON数组存储)
-  embedding String?
+  // 向量数据 — 使用 pgvector 的 vector 类型存储
+  // 通过 Prisma Unsupported 类型映射，SQL 层面使用 vector(1024)
+  embedding Unsupported("vector(1024)")?
   
   // 分块位置
   chunkIndex Int
@@ -180,6 +203,10 @@ model DocumentChunk {
   @@index([documentId])
   @@map("document_chunks")
 }
+
+// ============================================================
+// 技能/工具
+// ============================================================
 
 // Skill工具表
 model Skill {
@@ -215,6 +242,10 @@ model Skill {
   @@map("skills")
 }
 
+// ============================================================
+// 对话与聊天
+// ============================================================
+
 // 对话历史表
 model ChatHistory {
   id String @id @default(uuid())
@@ -247,6 +278,10 @@ model ChatHistory {
   @@index([userId])
   @@map("chat_histories")
 }
+
+// ============================================================
+// MCP 服务器
+// ============================================================
 
 // MCP 服务器配置表
 model McpServer {

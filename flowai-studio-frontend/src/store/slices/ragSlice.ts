@@ -17,8 +17,8 @@ export interface RAGSlice {
   setError: (error: string | null) => void
   fetchKnowledgeBases: () => Promise<void>
   fetchKnowledgeBaseById: (id: string) => Promise<KnowledgeBase>
-  createKnowledgeBase: (data: { name: string; description?: string }) => Promise<KnowledgeBase>
-  updateKnowledgeBase: (id: string, data: { name?: string; description?: string }) => Promise<KnowledgeBase>
+  createKnowledgeBase: (data: { name: string; description?: string; embeddingModel?: string; embeddingDimension?: number; chunkSize?: number; chunkOverlap?: number; topK?: number; similarityThreshold?: number; retrievalMode?: string }) => Promise<KnowledgeBase>
+  updateKnowledgeBase: (id: string, data: { name?: string; description?: string; embeddingModel?: string; embeddingDimension?: number; chunkSize?: number; chunkOverlap?: number; topK?: number; similarityThreshold?: number; retrievalMode?: string }) => Promise<KnowledgeBase>
   deleteKnowledgeBase: (id: string) => Promise<void>
   uploadDocument: (knowledgeBaseId: string, file: File) => Promise<Document>
   deleteDocument: (documentId: string) => Promise<void>

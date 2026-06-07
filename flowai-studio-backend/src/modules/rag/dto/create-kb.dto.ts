@@ -16,6 +16,13 @@ export class CreateKnowledgeBaseDto {
   embeddingModel?: string;
 
   @IsOptional()
+  @IsNumber({}, { message: 'Embedding dimension must be a number' })
+  @IsIn([768, 1024, 1536], {
+    message: 'Embedding dimension must be 768, 1024, or 1536',
+  })
+  embeddingDimension?: number;
+
+  @IsOptional()
   @IsNumber({}, { message: 'Chunk size must be a number' })
   @Min(100, { message: 'Chunk size must be at least 100' })
   @Max(2000, { message: 'Chunk size must not exceed 2000' })
@@ -38,4 +45,11 @@ export class CreateKnowledgeBaseDto {
   @Min(0, { message: 'Similarity threshold must be at least 0' })
   @Max(1, { message: 'Similarity threshold must not exceed 1' })
   similarityThreshold?: number;
+
+  @IsOptional()
+  @IsString({ message: 'Retrieval mode must be a string' })
+  @IsIn(['vector', 'keyword', 'hybrid'], {
+    message: 'Retrieval mode must be vector, keyword, or hybrid',
+  })
+  retrievalMode?: string;
 }
