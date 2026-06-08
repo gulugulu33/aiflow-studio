@@ -8,6 +8,7 @@ import {
   ToolOutlined,
   BranchesOutlined,
   ExportOutlined,
+  RobotOutlined,
 } from '@ant-design/icons'
 import './NodePanel.css'
 
@@ -22,6 +23,7 @@ const nodeTypes: NodeType[] = [
   { type: 'start', label: '开始', icon: <PlayCircleOutlined />, color: '#7c3aed' },
   { type: 'userInput', label: '用户输入', icon: <UserOutlined />, color: '#059669' },
   { type: 'llm', label: '大模型', icon: <MessageOutlined />, color: '#7c3aed' },
+  { type: 'agent', label: '智能体', icon: <RobotOutlined />, color: '#8b5cf6' },
   { type: 'rag', label: 'RAG检索', icon: <BookOutlined />, color: '#d97706' },
   { type: 'skill', label: '工具', icon: <ToolOutlined />, color: '#0891b2' },
   { type: 'condition', label: '条件分支', icon: <BranchesOutlined />, color: '#dc2626' },

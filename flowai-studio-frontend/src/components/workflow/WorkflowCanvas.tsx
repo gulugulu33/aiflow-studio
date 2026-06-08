@@ -1,8 +1,8 @@
 import { useCallback, useRef } from 'react'
-import { ReactFlow, 
-  Background, 
-  Controls, 
-  MiniMap, 
+import { ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
   useReactFlow
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -14,6 +14,7 @@ import RAGNode from './nodes/RAGNode'
 import SkillNode from './nodes/SkillNode'
 import ConditionNode from './nodes/ConditionNode'
 import OutputNode from './nodes/OutputNode'
+import AgentNode from './nodes/AgentNode'
 import { NodeType, WorkflowNode } from '../../types'
 import './WorkflowCanvas.css'
 
@@ -26,6 +27,7 @@ const nodeTypes = {
   skill: SkillNode,
   condition: ConditionNode,
   output: OutputNode,
+  agent: AgentNode,
 }
 
 const createNodeData = (type: NodeType): WorkflowNode['data'] => {
@@ -62,6 +64,23 @@ const createNodeData = (type: NodeType): WorkflowNode['data'] => {
       return { label: '条件分支', conditions: [] }
     case 'output':
       return { label: '输出', outputValue: '' }
+    case 'agent':
+      return {
+        label: '智能体',
+        agentMode: 'single',
+        strategy: 'react',
+        model: 'qwen-turbo',
+        systemPrompt: '',
+        userPrompt: '',
+        temperature: 0.7,
+        maxTokens: 2048,
+        maxIterations: 10,
+        toolIds: [],
+        knowledgeBaseIds: [],
+        ragEnabled: false,
+        memoryEnabled: false,
+        memoryWindowSize: 10,
+      }
   }
 }
 

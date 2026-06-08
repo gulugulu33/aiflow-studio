@@ -7,6 +7,7 @@ import { SkillNodeExecutor } from './node-executors/skill-node.executor';
 import { ConditionNodeExecutor } from './node-executors/condition-node.executor';
 import { OutputNodeExecutor } from './node-executors/output-node.executor';
 import { UserInputNodeExecutor } from './node-executors/user-input-node.executor';
+import { AgentNodeExecutor } from './node-executors/agent-node.executor';
 
 @Injectable()
 export class NodeExecutorFactory {
@@ -20,6 +21,7 @@ export class NodeExecutorFactory {
     private readonly conditionNodeExecutor: ConditionNodeExecutor,
     private readonly outputNodeExecutor: OutputNodeExecutor,
     private readonly userInputNodeExecutor: UserInputNodeExecutor,
+    private readonly agentNodeExecutor: AgentNodeExecutor,
   ) {
     this.executors.set('start', this.startNodeExecutor);
     this.executors.set('llm', this.llmNodeExecutor);
@@ -28,6 +30,7 @@ export class NodeExecutorFactory {
     this.executors.set('condition', this.conditionNodeExecutor);
     this.executors.set('output', this.outputNodeExecutor);
     this.executors.set('userInput', this.userInputNodeExecutor);
+    this.executors.set('agent', this.agentNodeExecutor);
   }
 
   getExecutor(nodeType: string): INodeExecutor {

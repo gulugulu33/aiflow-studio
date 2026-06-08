@@ -35,7 +35,7 @@ export interface CreateAppForm {
 }
 
 // 工作流相关类型
-export type NodeType = 'start' | 'userInput' | 'llm' | 'rag' | 'skill' | 'condition' | 'output'
+export type NodeType = 'start' | 'userInput' | 'llm' | 'rag' | 'skill' | 'condition' | 'output' | 'agent'
 
 export interface BaseNodeData {
   label: string
@@ -79,14 +79,69 @@ export interface OutputNodeData extends BaseNodeData {
   outputValue: any
 }
 
-export type WorkflowNodeData = 
-  | StartNodeData 
-  | UserInputNodeData 
-  | LLMNodeData 
-  | RAGNodeData 
-  | SkillNodeData 
-  | ConditionNodeData 
+/** Agent 模式类型 */
+export type AgentMode = 'single' | 'supervisor'
+
+/** Agent 执行策略 */
+export type AgentStrategy = 'react' | 'plan-and-execute' | 'reflection'
+
+/** Worker Agent 配置 */
+export interface WorkerConfig {
+  id: string
+  name: string
+  description: string
+  systemPrompt: string
+  model: string
+  temperature: number
+  maxTokens: number
+  toolIds: string[]
+  knowledgeBaseIds: string[]
+  ragEnabled: boolean
+}
+
+/** Agent 节点数据 */
+export interface AgentNodeData extends BaseNodeData {
+  /** Agent 模式: single / supervisor */
+  agentMode: AgentMode
+  /** 执行策略 */
+  strategy: AgentStrategy
+  /** 模型 */
+  model: string
+  /** 系统提示词 */
+  systemPrompt: string
+  /** 用户提示词 */
+  userPrompt: string
+  /** 温度 */
+  temperature: number
+  /** 最大 Token */
+  maxTokens: number
+  /** 最大迭代轮数 */
+  maxIterations: number
+  /** 工具 ID 列表 */
+  toolIds: string[]
+  /** 知识库 ID 列表 */
+  knowledgeBaseIds: string[]
+  /** 是否启用 RAG */
+  ragEnabled: boolean
+  /** 是否启用记忆 */
+  memoryEnabled: boolean
+  /** 记忆窗口大小 */
+  memoryWindowSize: number
+  /** Supervisor 模式专用 */
+  supervisorPrompt?: string
+  /** Worker 列表 (supervisor 模式) */
+  workers?: WorkerConfig[]
+}
+
+export type WorkflowNodeData =
+  | StartNodeData
+  | UserInputNodeData
+  | LLMNodeData
+  | RAGNodeData
+  | SkillNodeData
+  | ConditionNodeData
   | OutputNodeData
+  | AgentNodeData
 
 export interface WorkflowNode {
   id: string
