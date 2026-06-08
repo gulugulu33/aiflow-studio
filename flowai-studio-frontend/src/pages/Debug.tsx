@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Typography, Input, Button, Select, Divider, message, Empty } from 'antd'
+import { Typography, Input, Button, Select, Divider, message, Empty, Progress } from 'antd'
 import {
   SendOutlined,
   RobotOutlined,
@@ -38,9 +38,11 @@ interface ChatMessage {
 
 interface NodeExecState {
   nodeId: string
-  status: 'running' | 'success' | 'failed' | 'skipped'
+  status: 'running' | 'success' | 'failed' | 'skipped' | 'timeout' | 'retrying'
   output?: any
   error?: string
+  durationMs?: number
+  attempt?: number
 }
 
 const Debug: React.FC = () => {
@@ -58,6 +60,8 @@ const Debug: React.FC = () => {
   const [workflowResult, setWorkflowResult] = useState<any>(null)
   const [nodeStates, setNodeStates] = useState<Record<string, NodeExecState>>({})
   const [wfStatus, setWfStatus] = useState<'idle' | 'running' | 'success' | 'failed'>('idle')
+  const [wfProgress, setWfProgress] = useState<{ executed: number; total: number; percentage: number } | null>(null)
+  const [wfElapsed, setWfElapsed] = useState<number>(0)
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
@@ -255,6 +259,8 @@ const Debug: React.FC = () => {
     setWorkflowResult(null)
     setNodeStates({})
     setWfStatus('running')
+    setWfProgress(null)
+    setWfElapsed(0)
 
     try {
       const response = await fetch(`/api/workflows/${selectedWorkflowId}/run/stream`, {
@@ -276,17 +282,34 @@ const Debug: React.FC = () => {
           try {
             const data = JSON.parse(event.data)
             if (data.type === 'node_status') {
-              const { nodeId, status, output, error } = data.data
+              const { nodeId, status, output, error, durationMs, attempt, progress } = data.data
               setNodeStates(prev => ({
                 ...prev,
-                [nodeId]: { nodeId, status, output, error },
+                [nodeId]: { nodeId, status, output, error, durationMs, attempt },
               }))
+              if (progress) setWfProgress(progress)
+            } else if (data.type === 'workflow_start') {
+              if (data.data?.totalNodes != null) {
+                setWfProgress({ executed: 0, total: data.data.totalNodes, percentage: 0 })
+              }
+            } else if (data.type === 'heartbeat') {
+              if (data.data?.elapsedMs != null) setWfElapsed(data.data.elapsedMs)
+              if (data.data?.progress) setWfProgress(data.data.progress)
             } else if (data.type === 'done') {
               setWorkflowResult(data.data?.finalContext || data.data)
               setWfStatus('success')
+              if (data.data?.stats?.durationMs != null) setWfElapsed(data.data.stats.durationMs)
+              if (data.data?.stats) {
+                setWfProgress({ executed: data.data.stats.executed, total: data.data.stats.total, percentage: 100 })
+              }
             } else if (data.type === 'error') {
               setWfStatus('failed')
-              message.error(data.data?.message || data.message || '工作流执行失败')
+              const isTimeout = data.data?.isTimeout
+              const isCancelled = data.data?.isCancelled
+              const msg = isTimeout ? `执行超时：${data.data?.message || ''}`
+                : isCancelled ? '执行已取消'
+                : (data.data?.message || data.message || '工作流执行失败')
+              message.error(msg)
             }
           } catch (e) {
             console.error('SSE parse error', e)
@@ -325,6 +348,10 @@ const Debug: React.FC = () => {
         return <CheckCircleOutlined style={{ color: 'var(--c-green)' }} />
       case 'failed':
         return <CloseCircleOutlined style={{ color: '#dc2626' }} />
+      case 'timeout':
+        return <CloseCircleOutlined style={{ color: '#d97706' }} />
+      case 'retrying':
+        return <LoadingOutlined spin style={{ color: '#d97706' }} />
       case 'skipped':
         return <MinusCircleOutlined style={{ color: 'var(--c-text-tertiary)' }} />
       default:
@@ -337,6 +364,8 @@ const Debug: React.FC = () => {
       case 'running': return '执行中'
       case 'success': return '成功'
       case 'failed': return '失败'
+      case 'timeout': return '超时'
+      case 'retrying': return '重试中'
       case 'skipped': return '已跳过'
       default: return status
     }
@@ -591,6 +620,27 @@ const Debug: React.FC = () => {
               <span>
                 {wfStatus === 'running' ? '执行中…' : wfStatus === 'success' ? '执行完成' : '执行失败'}
               </span>
+              {wfElapsed > 0 && (
+                <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--c-text-secondary)' }}>
+                  耗时 {(wfElapsed / 1000).toFixed(1)}s
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* 进度条 */}
+          {wfProgress && wfProgress.total > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--c-text-secondary)', marginBottom: 4 }}>
+                <span>执行进度</span>
+                <span>{wfProgress.executed} / {wfProgress.total} 节点 ({wfProgress.percentage}%)</span>
+              </div>
+              <Progress
+                percent={wfProgress.percentage}
+                status={wfStatus === 'failed' ? 'exception' : wfStatus === 'success' ? 'success' : 'active'}
+                size="small"
+                strokeColor={wfStatus === 'failed' ? '#dc2626' : 'var(--c-green)'}
+              />
             </div>
           )}
 
@@ -608,7 +658,13 @@ const Debug: React.FC = () => {
                       <span className="debug-wf-node-id">{ns.nodeId}</span>
                       <span className={`debug-wf-node-badge debug-wf-node-badge--${ns.status}`}>
                         {nodeStatusLabel(ns.status)}
+                        {ns.status === 'retrying' && ns.attempt ? ` (第${ns.attempt}次)` : ''}
                       </span>
+                      {ns.durationMs != null && ns.status === 'success' && (
+                        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--c-text-tertiary)' }}>
+                          {ns.durationMs}ms
+                        </span>
+                      )}
                     </div>
                     {ns.output && (
                       <pre className="debug-wf-node-output">

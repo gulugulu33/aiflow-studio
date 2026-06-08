@@ -9,16 +9,16 @@ interface AgentNodeProps {
   selected?: boolean
 }
 
-const AgentNode: React.FC<AgentNodeProps> = ({ data, id, selected }) => {
+const AgentNode: React.FC<AgentNodeProps> = ({ data, id }) => {
   const modeLabel = data.agentMode === 'supervisor' ? '多智能体' : '单智能体'
   const workerCount = data.agentMode === 'supervisor' ? (data.workers?.length || 0) : 0
 
   return (
     <BaseNode
+      id={id}
       label={data.label || '智能体'}
       icon={<RobotOutlined />}
       color="#8b5cf6"
-      selected={selected}
       width={200}
     >
       <Handle type="target" position={Position.Top} />
