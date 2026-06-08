@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { envSchema } from './config/env.config';
 import { PrismaModule } from './common/modules/prisma.module';
 import { RedisModule } from './common/modules/redis.module';
+import { CacheModule } from './common/modules/cache.module';
 import { UserModule } from './modules/user/user.module';
 import { AppModule as ApplicationModule } from './modules/app/app.module';
 import { WorkflowModule } from './modules/workflow/workflow.module';
@@ -29,6 +30,7 @@ import { McpModule } from './modules/mcp/mcp.module';
     }),
     PrismaModule,
     RedisModule,
+    CacheModule,
     UserModule,
     ApplicationModule,
     WorkflowModule,

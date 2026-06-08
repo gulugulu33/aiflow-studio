@@ -1,21 +1,27 @@
 import { Controller, Get } from '@nestjs/common';
 import { PrismaService } from '../../common/services/prisma.service';
 import { RedisService } from '../../common/services/redis.service';
+import { CacheService } from '../../common/services/cache.service';
 
 /**
  * 健康检查控制器
  * 用于 Docker HEALTHCHECK、K8s liveness/readiness probe、监控面板
  *
+ * Phase 2.4 增强:
+ * - 新增缓存系统健康检查（L1 + L2 状态、命中率统计）
+ *
  * 竞品对标:
  * - Dify: /health 端点检查 DB + Redis + 向量库
  * - n8n: /healthz 端点
  * - FastGPT: /api/health 端点
+ * - 本设计: DB + Redis + pgvector + 多级缓存状态 + 命中率统计
  */
 @Controller('health')
 export class HealthController {
   constructor(
     private prisma: PrismaService,
     private redisService: RedisService,
+    private cacheService: CacheService,
   ) {}
 
   @Get()
@@ -52,10 +58,31 @@ export class HealthController {
       checks.pgvector = { status: 'unhealthy', error: error instanceof Error ? error.message : 'Unknown error' };
     }
 
+    // 4. 多级缓存健康检查 (Phase 2.4)
+    try {
+      const cacheHealth = await this.cacheService.healthCheck();
+      checks.cache = cacheHealth;
+      if (cacheHealth.status === 'unhealthy') isHealthy = false;
+    } catch (error) {
+      checks.cache = { status: 'unhealthy', error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+
     return {
       status: isHealthy ? 'healthy' : 'degraded',
       timestamp: new Date().toISOString(),
       checks,
     };
+  }
+
+  /**
+   * 缓存统计端点 — 用于监控面板
+   *
+   * Phase 2.4 新增:
+   * - L1/L2 命中率、缓存大小、回源次数
+   * - 互斥锁竞争统计
+   */
+  @Get('cache-stats')
+  getCacheStats() {
+    return this.cacheService.getStats();
   }
 }

@@ -1,6 +1,12 @@
 /**
  * RAG Service — 检索增强生成核心服务
  *
+ * Phase 2.4 增强:
+ * - 多级缓存集成: L1 内存 LRU + L2 Redis
+ * - 知识库列表/详情: @Cacheable 缓存，@CacheEvict 失效
+ * - 检索结果缓存: 相同 query + KB 组合命中缓存
+ * - 文档上传/删除/更新时自动失效相关缓存
+ *
  * Phase 2.3 增强:
  * - 新增 Reranker 集成：检索结果自动重排序，提高 Top-K 精度
  * - 支持 Cohere Rerank（云端）+ Ollama 本地 Reranker（零成本）
@@ -12,14 +18,15 @@
  * - BM25 关键词检索 + RRF 融合 + 自适应降级
  *
  * 竞品对标:
- * - Dify: 支持 vector/keyword/hybrid + Cohere Rerank（不支持本地 Reranker）
- * - FastGPT: 支持 vector/fullText/hybrid + Cohere Rerank（不支持本地）
- * - Coze: 仅向量检索，无 Reranker
- * - Flowise: 支持 vector + keyword + HuggingFace/Cohere Reranker
- * - 本设计: RRF 融合 + Cohere + Ollama 本地 Reranker + 自适应降级
+ * - Dify: 支持 vector/keyword/hybrid + Cohere Rerank（不支持本地 Reranker）+ Redis 缓存
+ * - FastGPT: 支持 vector/fullText/hybrid + Cohere Rerank + Redis 缓存
+ * - Coze: 仅向量检索，无 Reranker + 多层缓存
+ * - Flowise: 支持 vector + keyword + HuggingFace/Cohere Reranker + 内存缓存
+ * - 本设计: RRF 融合 + Cohere + Ollama + L1/L2 多级缓存 + 互斥锁防击穿
  */
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../common/services/prisma.service';
+import { CacheService } from '../../../common/services/cache.service';
 import { CreateKnowledgeBaseDto } from '../dto/create-kb.dto';
 import { UpdateKnowledgeBaseDto } from '../dto/update-kb.dto';
 import { EmbeddingFactory } from '../factories/embedding.factory';
@@ -34,6 +41,7 @@ import {
 import { BM25KeywordService } from './bm25-keyword.service';
 import { RRFFusionService } from './rrf-fusion.service';
 import { RerankerFactory, RerankerType } from '../providers/reranker/reranker.factory';
+import { CacheTTL, CachePrefix } from '../../../common/decorators/cache.decorator';
 import * as fs from 'fs';
 
 @Injectable()
@@ -47,6 +55,7 @@ export class RAGService {
     private bm25Service: BM25KeywordService,
     private rrfFusionService: RRFFusionService,
     private rerankerFactory: RerankerFactory,
+    private cacheService: CacheService,
   ) {}
 
   // ============================================================
@@ -81,21 +90,54 @@ export class RAGService {
       );
     }
 
+    // 失效知识库列表缓存
+    await this.invalidateKBCache(userId);
+
     return kb;
   }
 
+  /**
+   * 查询知识库列表 — L1 + L2 缓存
+   *
+   * Phase 2.4 缓存策略:
+   * - 缓存键: kb:list:{userId}
+   * - L1 TTL: 12s (l1DefaultTTL * 0.2)
+   * - L2 TTL: 300s (5 分钟)
+   * - 写操作时自动失效
+   *
+   * 竞品对标:
+   * - Dify: Redis 缓存知识库列表，5min TTL
+   * - FastGPT: Redis 缓存，手动失效
+   * - 本设计: L1/L2 双层 + 写时自动失效
+   */
   async findKnowledgeBases(userId: string) {
-    return this.prisma.knowledgeBase.findMany({
-      where: { userId },
-      include: { documents: { select: { id: true, name: true, size: true, createdAt: true, status: true } } },
-    });
+    return this.cacheService.getOrSet(
+      `${CachePrefix.KNOWLEDGE_BASE}:list:${userId}`,
+      () => this.prisma.knowledgeBase.findMany({
+        where: { userId },
+        include: { documents: { select: { id: true, name: true, size: true, createdAt: true, status: true } } },
+      }),
+      CacheTTL.KNOWLEDGE_BASES,
+    );
   }
 
+  /**
+   * 查询知识库详情 — L1 + L2 缓存
+   *
+   * Phase 2.4 缓存策略:
+   * - 缓存键: kb:detail:{id}
+   * - L2 TTL: 600s (10 分钟)
+   * - 更新/删除时自动失效
+   */
   async findKnowledgeBaseById(userId: string, id: string) {
-    const kb = await this.prisma.knowledgeBase.findUnique({
-      where: { id },
-      include: { documents: true },
-    });
+    const kb = await this.cacheService.getOrSet(
+      `${CachePrefix.KNOWLEDGE_BASE}:detail:${id}`,
+      () => this.prisma.knowledgeBase.findUnique({
+        where: { id },
+        include: { documents: true },
+      }),
+      CacheTTL.KNOWLEDGE_BASE_DETAIL,
+    );
 
     if (!kb) {
       throw new NotFoundException('Knowledge base not found');
@@ -109,16 +151,21 @@ export class RAGService {
   }
 
   async updateKnowledgeBase(userId: string, id: string, updateKnowledgeBaseDto: UpdateKnowledgeBaseDto) {
-    await this.findKnowledgeBaseById(userId, id);
+    const kb = await this.findKnowledgeBaseById(userId, id);
 
-    return this.prisma.knowledgeBase.update({
+    const updated = await this.prisma.knowledgeBase.update({
       where: { id },
       data: updateKnowledgeBaseDto,
     });
+
+    // 失效知识库详情 + 列表缓存
+    await this.invalidateKBCache(kb.userId, id);
+
+    return updated;
   }
 
   async deleteKnowledgeBase(userId: string, id: string) {
-    await this.findKnowledgeBaseById(userId, id);
+    const kb = await this.findKnowledgeBaseById(userId, id);
 
     // 尝试从向量存储中删除对应集合
     try {
@@ -134,7 +181,13 @@ export class RAGService {
 
     // 删除知识库（级联删除文档和分块）
     await this.prisma.document.deleteMany({ where: { knowledgeBaseId: id } });
-    return this.prisma.knowledgeBase.delete({ where: { id } });
+    const result = await this.prisma.knowledgeBase.delete({ where: { id } });
+
+    // 失效知识库详情 + 列表缓存 + 检索缓存
+    await this.invalidateKBCache(kb.userId, id);
+    await this.cacheService.deleteByPrefix(`${CachePrefix.KNOWLEDGE_BASE_RETRIEVAL}:${id}`);
+
+    return result;
   }
 
   // ============================================================
@@ -223,6 +276,10 @@ export class RAGService {
       }).catch(() => {});
     });
 
+    // 失效知识库详情 + 列表缓存 + 检索缓存
+    await this.invalidateKBCache(userId, knowledgeBaseId);
+    await this.cacheService.deleteByPrefix(`${CachePrefix.KNOWLEDGE_BASE_RETRIEVAL}:${knowledgeBaseId}`);
+
     return document;
   }
 
@@ -294,6 +351,14 @@ export class RAGService {
     );
   }
 
+  /**
+   * 查询文档分块 — L1 + L2 缓存
+   *
+   * Phase 2.4 缓存策略:
+   * - 缓存键: doc:chunks:{documentId}
+   * - L2 TTL: 900s (15 分钟)
+   * - 文档上传完成/删除时自动失效
+   */
   async getDocumentChunks(userId: string, documentId: string) {
     const document = await this.prisma.document.findUnique({
       where: { id: documentId },
@@ -308,19 +373,23 @@ export class RAGService {
       throw new BadRequestException('You do not have permission to access this document');
     }
 
-    const chunks = await this.prisma.documentChunk.findMany({
-      where: { documentId },
-      orderBy: { chunkIndex: 'asc' },
-      select: {
-        id: true,
-        content: true,
-        chunkIndex: true,
-        startIndex: true,
-        endIndex: true,
-        metadata: true,
-        createdAt: true,
-      },
-    });
+    const chunks = await this.cacheService.getOrSet(
+      `${CachePrefix.DOCUMENT}:chunks:${documentId}`,
+      () => this.prisma.documentChunk.findMany({
+        where: { documentId },
+        orderBy: { chunkIndex: 'asc' },
+        select: {
+          id: true,
+          content: true,
+          chunkIndex: true,
+          startIndex: true,
+          endIndex: true,
+          metadata: true,
+          createdAt: true,
+        },
+      }),
+      CacheTTL.DOCUMENT_CHUNKS,
+    );
 
     return {
       documentId,
@@ -357,7 +426,14 @@ export class RAGService {
     }
 
     await this.prisma.documentChunk.deleteMany({ where: { documentId } });
-    return this.prisma.document.delete({ where: { id: documentId } });
+    const result = await this.prisma.document.delete({ where: { id: documentId } });
+
+    // 失效知识库详情 + 列表缓存 + 文档分块缓存 + 检索缓存
+    await this.invalidateKBCache(userId, document.knowledgeBaseId);
+    await this.cacheService.delete(`${CachePrefix.DOCUMENT}:chunks:${documentId}`);
+    await this.cacheService.deleteByPrefix(`${CachePrefix.KNOWLEDGE_BASE_RETRIEVAL}:${document.knowledgeBaseId}`);
+
+    return result;
   }
 
   // ============================================================
@@ -368,19 +444,25 @@ export class RAGService {
    * 统一检索入口
    *
    * 流程:
-   * 1. 根据 retrievalMode 执行检索（vector / keyword / hybrid）
-   * 2. 如果知识库启用了 Reranker，对检索结果重排序
-   * 3. 返回最终结果
+   * 1. 查检索缓存（L1 + L2）
+   * 2. 根据 retrievalMode 执行检索（vector / keyword / hybrid）
+   * 3. 如果知识库启用了 Reranker，对检索结果重排序
+   * 4. 写入缓存并返回最终结果
+   *
+   * Phase 2.4 缓存策略:
+   * - 缓存键: kb:retrieve:{kbId}:{queryHash}:{mode}:{topK}
+   * - L2 TTL: 120s (2 分钟，检索结果变化较快)
+   * - 文档增删时自动失效
    *
    * Phase 2.3 增强:
    * - 检索后自动 Rerank（如知识库配置了 reranker）
    * - Reranker 降级：Reranker 不可用时返回原始检索结果
    *
    * 竞品对标:
-   * - Dify: 支持 vector/keyword/hybrid + Cohere Rerank
-   * - FastGPT: 支持 vector/fullText/hybrid + Cohere Rerank
-   * - Coze: 仅向量检索，无 Reranker
-   * - 本设计: 检索 + Rerank + 自适应降级
+   * - Dify: 支持 vector/keyword/hybrid + Cohere Rerank + Redis 缓存
+   * - FastGPT: 支持 vector/fullText/hybrid + Cohere Rerank + Redis 缓存
+   * - Coze: 仅向量检索，无 Reranker + 多层缓存
+   * - 本设计: 检索 + Rerank + L1/L2 缓存 + 自适应降级
    */
   async retrieve(
     query: string,
@@ -402,7 +484,17 @@ export class RAGService {
     const vectorWeight = vectorWeightOverride ?? (kb as any).vectorWeight ?? 0.7;
     const rrfK = rrfKOverride ?? (kb as any).rrfK ?? 60;
 
-    // 2. 根据检索模式执行检索
+    // 2. 构建检索缓存键
+    const cacheKey = `${CachePrefix.KNOWLEDGE_BASE_RETRIEVAL}:${knowledgeBaseId}:${this.hashQuery(query)}:${retrievalMode}:${effectiveTopK}`;
+
+    // 3. 尝试命中缓存
+    const cachedResults = await this.cacheService.get<any>(cacheKey);
+    if (cachedResults !== null) {
+      this.logger.debug(`Retrieval cache hit for KB ${knowledgeBaseId}, mode=${retrievalMode}`);
+      return cachedResults;
+    }
+
+    // 4. 缓存未命中，执行检索
     let results: any[];
     switch (retrievalMode) {
       case 'keyword':
@@ -417,8 +509,11 @@ export class RAGService {
         break;
     }
 
-    // 3. Reranker 重排序（如知识库启用）
+    // 5. Reranker 重排序（如知识库启用）
     results = await this.applyReranker(query, results, kb, effectiveTopK);
+
+    // 6. 写入检索缓存（短 TTL，因为检索结果随文档增删变化）
+    await this.cacheService.set(cacheKey, results, CacheTTL.KNOWLEDGE_BASE_RETRIEVAL);
 
     return results;
   }
@@ -885,5 +980,55 @@ export class RAGService {
         return '';
       }
     }
+  }
+
+  // ============================================================
+  // 缓存辅助方法 (Phase 2.4)
+  // ============================================================
+
+  /**
+   * 失效知识库相关缓存
+   *
+   * 策略: 写操作时同时失效列表和详情缓存
+   * - 列表缓存: kb:list:{userId}
+   * - 详情缓存: kb:detail:{kbId}
+   *
+   * 竞品对标:
+   * - Dify: 写操作后手动删除 Redis 缓存键
+   * - Spring Cache: @CacheEvict 自动失效
+   * - 本设计: 显式失效 + 前缀批量删除
+   */
+  private async invalidateKBCache(userId: string, kbId?: string): Promise<void> {
+    const invalidations: Promise<any>[] = [];
+
+    // 失效知识库列表缓存
+    invalidations.push(
+      this.cacheService.delete(`${CachePrefix.KNOWLEDGE_BASE}:list:${userId}`),
+    );
+
+    // 失效知识库详情缓存
+    if (kbId) {
+      invalidations.push(
+        this.cacheService.delete(`${CachePrefix.KNOWLEDGE_BASE}:detail:${kbId}`),
+      );
+    }
+
+    await Promise.allSettled(invalidations);
+  }
+
+  /**
+   * 对查询文本做简单哈希（用于检索缓存键）
+   *
+   * 使用简单哈希避免长查询文本作为缓存键
+   * 不使用 crypto（更重），用简单字符串哈希即可
+   */
+  private hashQuery(query: string): string {
+    let hash = 0;
+    for (let i = 0; i < query.length; i++) {
+      const char = query.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
   }
 }
