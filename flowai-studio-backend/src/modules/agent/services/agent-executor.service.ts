@@ -1,46 +1,43 @@
 /**
- * Agent 执行器服务
+ * Agent 执行引擎
  *
- * Phase 3.1 核心实现 — 基于 LangGraph.js 的多智能体架构
- *
- * 架构设计:
- * 1. Single Agent: 单 Agent + ReAct 循环（思考→行动→观察→...）
- * 2. Supervisor Agent: Supervisor 协调多个 Worker Agent
- * 3. Swarm Agent: 去中心化协作（Phase 3.x 后续扩展）
+ * Phase 3.1: Supervisor/Worker 模式 ReAct 循环
+ * Phase 3.2: 多模型支持，通过 LLMProviderFactory 自动路由
  *
  * 核心能力:
- * - ReAct 循环: LLM 推理 + 工具调用 + 观察结果
- * - 工具绑定: 复用 SkillService，自动转换为 Function Calling 格式
- * - RAG 集成: Agent 可自主决策是否需要知识库检索
- * - 执行轨迹: 完整记录 Agent 思考、行动过程
- * - 迭代限制: 防止无限循环
- * - SSE 推送: 实时展示 Agent 执行过程
+ * - Single Agent ReAct 循环（推理 + 行动）
+ * - Supervisor/Worker 模式（Supervisor 协调多个 Worker）
+ * - 工具调用（复用 SkillService）
+ * - RAG 知识检索（复用 RAGService）
+ * - SSE 实时推送
+ * - 执行轨迹审计
+ * - 多模型自动路由（根据 model ID 选择对应 Provider）
  */
 import { Injectable, Logger } from '@nestjs/common';
-import { StateGraph, END, START } from '@langchain/langgraph';
-import { LLMProviderService } from './llm-provider.service';
 import { SkillService } from '../../skill/services/skill.service';
 import { RAGService } from '../../rag/services/rag.service';
 import { PrismaService } from '../../../common/services/prisma.service';
+import { LLMProviderFactory } from '../providers/llm-provider.factory';
 import {
   AgentNodeConfig,
   AgentState,
-  AgentExecutionResult,
   AgentMessage,
-  AgentTraceEntry,
   WorkerAgentConfig,
-  ToolResult,
   ToolCall,
-  ToolDefinition,
+  ToolResult,
+  AgentTraceEntry,
+  AgentExecutionResult,
   AgentRunOptions,
+  ToolDefinition,
 } from '../interfaces/agent.interface';
+import { LLMChatParams } from '../interfaces/llm-provider.interface';
 
 @Injectable()
 export class AgentExecutorService {
   private readonly logger = new Logger(AgentExecutorService.name);
 
   constructor(
-    private readonly llmProvider: LLMProviderService,
+    private readonly providerFactory: LLMProviderFactory,
     private readonly skillService: SkillService,
     private readonly ragService: RAGService,
     private readonly prisma: PrismaService,
@@ -147,12 +144,15 @@ export class AgentExecutorService {
     // 加载可用工具
     const tools = await this.loadTools(agentConfig.toolIds);
     const toolMap = this.buildToolMap(tools);
-    const toolDefinitions = this.llmProvider.buildToolDefinitions(tools);
+    const toolDefinitions = this.buildToolDefinitions(tools);
 
     // RAG 上下文（如果启用）
     if (agentConfig.ragEnabled && agentConfig.knowledgeBaseIds.length > 0) {
       await this.enrichWithRAG(state, agentConfig.knowledgeBaseIds, input);
     }
+
+    // 获取对应模型的 Provider
+    const provider = this.providerFactory.getProviderForModel(agentConfig.model);
 
     // ReAct 循环
     while (state.iteration < maxIterations && !state.finished) {
@@ -175,8 +175,8 @@ export class AgentExecutorService {
         },
       });
 
-      // 调用 LLM
-      const llmResponse = await this.llmProvider.chat({
+      // 调用 LLM（通过 Factory 自动路由）
+      const llmResponse = await provider.chat({
         messages: state.messages.map((m) => ({
           role: m.role === 'supervisor' ? 'assistant' : m.role,
           content: m.content,
@@ -354,7 +354,7 @@ export class AgentExecutorService {
     for (const worker of supervisorConfig.workers) {
       const tools = await this.loadTools(worker.toolIds);
       const toolMap = this.buildToolMap(tools);
-      const toolDefinitions = this.llmProvider.buildToolDefinitions(tools);
+      const toolDefinitions = this.buildToolDefinitions(tools);
       workerToolMaps.set(worker.id, {
         tools: toolDefinitions,
         toolMap,
@@ -397,6 +397,9 @@ export class AgentExecutorService {
       },
     });
 
+    // 获取 Supervisor 模型的 Provider
+    const supervisorProvider = this.providerFactory.getProviderForModel(supervisorConfig.model);
+
     // ReAct 循环（Supervisor 视角）
     while (state.iteration < maxIterations && !state.finished) {
       state.iteration++;
@@ -416,7 +419,7 @@ export class AgentExecutorService {
       });
 
       // 调用 Supervisor LLM
-      const supervisorResponse = await this.llmProvider.chat({
+      const supervisorResponse = await supervisorProvider.chat({
         messages: state.messages.map((m) => ({
           role: m.role === 'supervisor' ? 'assistant' : m.role,
           content: m.content,
@@ -607,11 +610,14 @@ export class AgentExecutorService {
       await this.enrichWithRAG(state, workerConfig.knowledgeBaseIds, task);
     }
 
+    // 获取 Worker 模型的 Provider
+    const provider = this.providerFactory.getProviderForModel(workerConfig.model);
+
     // ReAct 循环
     while (state.iteration < maxIterations && !state.finished) {
       state.iteration++;
 
-      const llmResponse = await this.llmProvider.chat({
+      const llmResponse = await provider.chat({
         messages: state.messages.map((m) => ({
           role: m.role === 'supervisor' ? 'assistant' : m.role,
           content: m.content,
@@ -742,10 +748,22 @@ export class AgentExecutorService {
     const map = new Map<string, { id: string; name: string }>();
     for (const tool of tools) {
       // 使用处理后的名称作为 key（去除特殊字符）
-      const sanitizedName = tool.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      const sanitizedName = tool.name.replace(/[^a-zA-Z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
       map.set(sanitizedName, { id: tool.id, name: tool.name });
     }
     return map;
+  }
+
+  /**
+   * 构建工具定义（通过 Provider）
+   */
+  private buildToolDefinitions(
+    tools: Array<{ id: string; name: string; description: string; inputSchema: any }>,
+  ): ToolDefinition[] {
+    // 使用 Qwen Provider 的 buildToolDefinitions 作为默认（OpenAI 兼容格式）
+    // 因为所有 Provider 都兼容此格式或内部转换
+    const qwenProvider = this.providerFactory.create('qwen');
+    return qwenProvider.buildToolDefinitions(tools);
   }
 
   /**

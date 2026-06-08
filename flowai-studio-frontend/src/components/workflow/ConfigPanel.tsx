@@ -1,11 +1,83 @@
-import { useEffect, useState } from 'react'
-import { useStore } from '../../store'
-import { Form, Input, InputNumber, Select, Slider, Switch, Typography, Empty, Button, Card, Space, Divider, Tag } from 'antd'
+import React, { useEffect, useState } from 'react'
+import { Form, Input, Select, Slider, InputNumber, Switch, Divider, Card, Button, Space, Tag, Empty, Typography } from 'antd'
 import { PlusOutlined, DeleteOutlined, RobotOutlined } from '@ant-design/icons'
-import './ConfigPanel.css'
+import { useStore } from '../../store'
 
+const { Option, OptGroup } = Select
 const { Text } = Typography
-const { Option } = Select
+
+const MODEL_GROUPS = [
+  {
+    provider: 'qwen',
+    label: '🇨🇳 通义千问 (Qwen)',
+    models: [
+      { id: 'qwen-turbo', name: 'Qwen Turbo', tag: '快速', tagColor: 'green' },
+      { id: 'qwen-plus', name: 'Qwen Plus', tag: '高质量', tagColor: 'blue' },
+      { id: 'qwen-max', name: 'Qwen Max', tag: '最强', tagColor: 'purple' },
+      { id: 'qwen-long', name: 'Qwen Long', tag: '长文本', tagColor: 'orange' },
+    ],
+  },
+  {
+    provider: 'openai',
+    label: '🌐 OpenAI',
+    models: [
+      { id: 'gpt-4o', name: 'GPT-4o', tag: '推荐', tagColor: 'gold' },
+      { id: 'gpt-4o-mini', name: 'GPT-4o Mini', tag: '性价比', tagColor: 'green' },
+      { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', tag: '强大', tagColor: 'purple' },
+      { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', tag: '经济', tagColor: 'default' },
+    ],
+  },
+  {
+    provider: 'claude',
+    label: '🤖 Anthropic Claude',
+    models: [
+      { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', tag: '推荐', tagColor: 'gold' },
+      { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', tag: '最强', tagColor: 'purple' },
+      { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', tag: '快速', tagColor: 'green' },
+    ],
+  },
+  {
+    provider: 'gemini',
+    label: '✨ Google Gemini',
+    models: [
+      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', tag: '100万上下文', tagColor: 'blue' },
+      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', tag: '快速', tagColor: 'green' },
+      { id: 'gemini-1.0-pro', name: 'Gemini 1.0 Pro', tag: '稳定', tagColor: 'default' },
+    ],
+  },
+  {
+    provider: 'ollama',
+    label: '🏠 Ollama (本地)',
+    models: [
+      { id: 'qwen2.5:7b', name: 'Qwen2.5 7B', tag: '本地', tagColor: 'cyan' },
+      { id: 'llama3.1:8b', name: 'Llama 3.1 8B', tag: '本地', tagColor: 'cyan' },
+      { id: 'mistral:7b', name: 'Mistral 7B', tag: '本地', tagColor: 'cyan' },
+      { id: 'deepseek-coder-v2:16b', name: 'DeepSeek Coder V2 16B', tag: '本地', tagColor: 'cyan' },
+    ],
+  },
+]
+
+const ModelSelect: React.FC<{
+  value?: string;
+  onChange?: (value: string) => void;
+  style?: React.CSSProperties;
+  size?: 'small' | 'middle' | 'large';
+}> = ({ value, onChange, style, size }) => (
+  <Select value={value} onChange={onChange} style={style} size={size} placeholder="选择模型" showSearch optionFilterProp="label">
+    {MODEL_GROUPS.map((group) => (
+      <OptGroup key={group.provider} label={group.label}>
+        {group.models.map((model) => (
+          <Option key={model.id} value={model.id} label={model.name}>
+            <Space>
+              <span>{model.name}</span>
+              <Tag color={model.tagColor} style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>{model.tag}</Tag>
+            </Space>
+          </Option>
+        ))}
+      </OptGroup>
+    ))}
+  </Select>
+)
 
 const ConfigPanel: React.FC = () => {
   const { selectedNode, updateNodeData, knowledgeBases, fetchKnowledgeBases, skills, fetchSkills } = useStore()
@@ -100,10 +172,7 @@ const ConfigPanel: React.FC = () => {
           </Select>
         </Form.Item>
         <Form.Item name="model" label="模型" initialValue="qwen-turbo">
-          <Select>
-            <Option value="qwen-turbo">Qwen Turbo (快速)</Option>
-            <Option value="qwen-plus">Qwen Plus (高质量)</Option>
-          </Select>
+          <ModelSelect style={{ width: '100%' }} />
         </Form.Item>
         <Form.Item name="systemPrompt" label="系统提示词">
           <Input.TextArea rows={4} placeholder="定义 Agent 的角色、能力和行为规范" />
@@ -152,6 +221,9 @@ const ConfigPanel: React.FC = () => {
             <Form.Item name="supervisorPrompt" label="Supervisor 提示词">
               <Input.TextArea rows={4} placeholder="定义 Supervisor 的协调策略，留空使用默认" />
             </Form.Item>
+            <Form.Item name="supervisorModel" label="Supervisor 模型" initialValue="qwen-plus">
+              <ModelSelect style={{ width: '100%' }} />
+            </Form.Item>
             <Divider orientation="left" style={{ margin: '12px 0 12px' }}>🤖 Workers ({workers.length})</Divider>
             {workers.map((worker, index) => (
               <Card
@@ -170,10 +242,7 @@ const ConfigPanel: React.FC = () => {
                   <Input value={worker.description} onChange={(e) => updateWorker(index, 'description', e.target.value)} placeholder="Worker 职责描述" size="small" />
                   <Input.TextArea value={worker.systemPrompt} onChange={(e) => updateWorker(index, 'systemPrompt', e.target.value)} placeholder="Worker 系统提示词" rows={2} style={{ fontSize: 12 }} />
                   <Space>
-                    <Select value={worker.model} onChange={(v) => updateWorker(index, 'model', v)} size="small" style={{ width: 140 }}>
-                      <Option value="qwen-turbo">Qwen Turbo</Option>
-                      <Option value="qwen-plus">Qwen Plus</Option>
-                    </Select>
+                    <ModelSelect value={worker.model} onChange={(v) => updateWorker(index, 'model', v)} size="small" style={{ width: 180 }} />
                     <Text type="secondary" style={{ fontSize: 11 }}>温度:</Text>
                     <InputNumber value={worker.temperature} onChange={(v) => updateWorker(index, 'temperature', v)} min={0} max={1} step={0.1} size="small" style={{ width: 60 }} />
                   </Space>
@@ -207,7 +276,9 @@ const ConfigPanel: React.FC = () => {
         return (
           <>
             {commonFields}
-            <Form.Item name="model" label="模型" initialValue="qwen-turbo"><Select><Option value="qwen-turbo">Qwen Turbo</Option><Option value="qwen-plus">Qwen Plus</Option></Select></Form.Item>
+            <Form.Item name="model" label="模型" initialValue="qwen-turbo">
+              <ModelSelect style={{ width: '100%' }} />
+            </Form.Item>
             <Form.Item name="systemPrompt" label="系统提示词"><Input.TextArea rows={4} placeholder="定义模型的角色和行为" /></Form.Item>
             <Form.Item name="userPrompt" label="用户提示词" rules={[{ required: true }]}><Input.TextArea rows={6} placeholder="输入用户的问题，可使用 {{变量}} 引用上下文" /></Form.Item>
             <Form.Item name="temperature" label="温度" initialValue={0.7}><Slider min={0} max={1} step={0.1} /></Form.Item>

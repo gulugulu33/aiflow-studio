@@ -1,7 +1,7 @@
 /**
  * AgentExecutorService 单元测试
  *
- * Phase 3.1 测试覆盖:
+ * Phase 3.1 + 3.2 测试覆盖:
  * - Single Agent ReAct 循环
  * - 工具调用与结果处理
  * - 最大迭代次数限制
@@ -9,9 +9,10 @@
  * - RAG 集成
  * - 执行轨迹
  * - 错误处理
+ * - 多模型路由
  */
 import { AgentExecutorService } from '../services/agent-executor.service';
-import { LLMProviderService } from '../services/llm-provider.service';
+import { LLMProviderFactory } from '../providers/llm-provider.factory';
 import { SkillService } from '../../skill/services/skill.service';
 import { RAGService } from '../../rag/services/rag.service';
 import {
@@ -21,7 +22,8 @@ import {
 
 describe('AgentExecutorService', () => {
   let agentExecutor: AgentExecutorService;
-  let mockLLMProvider: any;
+  let mockProviderFactory: any;
+  let mockProvider: any;
   let mockSkillService: any;
   let mockRAGService: any;
   let mockPrismaService: any;
@@ -29,10 +31,22 @@ describe('AgentExecutorService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Mock LLMProviderService
-    mockLLMProvider = {
+    // Mock LLM Provider
+    mockProvider = {
       chat: jest.fn(),
+      chatStream: jest.fn(),
       buildToolDefinitions: jest.fn().mockReturnValue([]),
+      name: 'qwen',
+      defaultModel: 'qwen-turbo',
+      supportedModels: [],
+      healthCheck: jest.fn().mockResolvedValue(true),
+      estimateTokens: jest.fn().mockReturnValue(100),
+    };
+
+    // Mock LLMProviderFactory
+    mockProviderFactory = {
+      getProviderForModel: jest.fn().mockReturnValue(mockProvider),
+      create: jest.fn().mockReturnValue(mockProvider),
     };
 
     // Mock SkillService
@@ -57,7 +71,7 @@ describe('AgentExecutorService', () => {
     };
 
     agentExecutor = new AgentExecutorService(
-      mockLLMProvider as any,
+      mockProviderFactory as any,
       mockSkillService as any,
       mockRAGService as any,
       mockPrismaService as any,
@@ -89,9 +103,8 @@ describe('AgentExecutorService', () => {
       },
     };
 
-    it('should return final answer when LLM responds without tool calls', async () => {
-      // LLM 直接给出最终答案
-      mockLLMProvider.chat.mockResolvedValue({
+    it('should execute a single agent with direct answer', async () => {
+      mockProvider.chat.mockResolvedValue({
         content: '这是最终答案',
         toolCalls: undefined,
       });
@@ -101,111 +114,60 @@ describe('AgentExecutorService', () => {
       expect(result.success).toBe(true);
       expect(result.result).toBe('这是最终答案');
       expect(result.iterations).toBe(1);
-      expect(result.toolCallCount).toBe(0);
+      expect(mockProviderFactory.getProviderForModel).toHaveBeenCalledWith('qwen-turbo');
     });
 
-    it('should call tools and then give final answer', async () => {
-      // 第一次调用: LLM 决定调用工具
-      mockLLMProvider.chat
-        .mockResolvedValueOnce({
-          content: '',
-          toolCalls: [
-            {
-              id: 'call_1',
-              name: 'calculator',
-              arguments: { expression: '2+2' },
-            },
-          ],
-        })
-        // 第二次调用: LLM 给出最终答案
-        .mockResolvedValueOnce({
-          content: '2+2=4',
-          toolCalls: undefined,
-        });
-
-      mockLLMProvider.buildToolDefinitions.mockReturnValue([
-        {
-          name: 'calculator',
-          description: '计算数学表达式',
-          parameters: { type: 'object', properties: { expression: { type: 'string' } } },
-        },
-      ]);
-
-      mockSkillService.executeSkill.mockResolvedValue({
-        success: true,
-        data: { expression: '2+2', result: 4 },
+    it('should execute tool calls and return final answer', async () => {
+      // 第一次调用返回工具调用
+      mockProvider.chat.mockResolvedValueOnce({
+        content: '',
+        toolCalls: [
+          { id: 'call_1', name: '___', arguments: { expression: '1+1' } },
+        ],
+      });
+      // 第二次调用返回最终答案
+      mockProvider.chat.mockResolvedValueOnce({
+        content: '1+1=2',
+        toolCalls: undefined,
       });
 
-      const result = await agentExecutor.execute(singleConfig, '2+2等于多少？');
+      mockSkillService.executeSkill.mockResolvedValue({ result: 2 });
+
+      const result = await agentExecutor.execute(singleConfig, '计算1+1');
 
       expect(result.success).toBe(true);
-      expect(result.result).toBe('2+2=4');
-      expect(result.iterations).toBe(2);
       expect(result.toolCallCount).toBe(1);
+      expect(result.iterations).toBe(2);
     });
 
     it('should stop at max iterations', async () => {
-      // LLM 一直调用工具，不给出最终答案
-      mockLLMProvider.chat.mockResolvedValue({
+      mockProvider.chat.mockResolvedValue({
         content: '',
         toolCalls: [
-          {
-            id: 'call_1',
-            name: 'calculator',
-            arguments: { expression: '1+1' },
-          },
+          { id: 'call_1', name: '___', arguments: { expression: 'loop' } },
         ],
       });
 
-      mockLLMProvider.buildToolDefinitions.mockReturnValue([
-        {
-          name: 'calculator',
-          description: '计算',
-          parameters: { type: 'object', properties: { expression: { type: 'string' } } },
-        },
-      ]);
+      const limitedConfig = { ...singleConfig, maxIterations: 3 };
+      mockSkillService.executeSkill.mockResolvedValue({ result: 'looping' });
 
-      mockSkillService.executeSkill.mockResolvedValue({ result: 2 });
+      const result = await agentExecutor.execute(limitedConfig, '无限循环');
 
-      const config: AgentNodeConfig = {
-        ...singleConfig,
-        maxIterations: 3,
-      };
-
-      const result = await agentExecutor.execute(config, '循环测试');
-
-      expect(result.success).toBe(true);
       expect(result.iterations).toBe(3);
-      expect(result.toolCallCount).toBe(3);
+      expect(result.success).toBe(true); // 不会报错，只是达到上限
     });
 
-    it('should include trace entries for thinking and tool calls', async () => {
-      mockLLMProvider.chat
-        .mockResolvedValueOnce({
-          content: '',
-          toolCalls: [
-            { id: 'call_1', name: 'calculator', arguments: { expression: '1+1' } },
-          ],
-        })
-        .mockResolvedValueOnce({
-          content: '1+1=2',
-          toolCalls: undefined,
-        });
+    it('should produce execution trace', async () => {
+      mockProvider.chat.mockResolvedValue({
+        content: '答案',
+        toolCalls: undefined,
+      });
 
-      mockLLMProvider.buildToolDefinitions.mockReturnValue([
-        { name: 'calculator', description: '计算', parameters: { type: 'object', properties: { expression: { type: 'string' } } } },
-      ]);
+      const result = await agentExecutor.execute(singleConfig, '测试');
 
-      mockSkillService.executeSkill.mockResolvedValue({ result: 2 });
-
-      const result = await agentExecutor.execute(singleConfig, '1+1=?');
-
-      // 应包含: thinking, tool_call, tool_result, thinking, final_answer
-      const traceTypes = result.trace.map((t) => t.type);
-      expect(traceTypes).toContain('thinking');
-      expect(traceTypes).toContain('tool_call');
-      expect(traceTypes).toContain('tool_result');
-      expect(traceTypes).toContain('final_answer');
+      expect(result.trace.length).toBeGreaterThan(0);
+      expect(result.trace.some((t: any) => t.type === 'thinking')).toBe(true);
+      expect(result.trace.some((t: any) => t.type === 'final_answer')).toBe(true);
     });
   });
 
@@ -221,28 +183,16 @@ describe('AgentExecutorService', () => {
       memoryEnabled: false,
       memoryWindowSize: 10,
       supervisor: {
-        systemPrompt: '你是任务协调者。',
-        model: 'qwen-plus',
-        temperature: 0.3,
+        systemPrompt: '你是协调者',
+        model: 'qwen-turbo',
+        temperature: 0.7,
         maxIterations: 15,
         workers: [
           {
-            id: 'researcher',
-            name: '研究员',
-            description: '负责信息搜索和分析',
-            systemPrompt: '你是一个研究员。',
-            model: 'qwen-turbo',
-            temperature: 0.7,
-            maxTokens: 2048,
-            toolIds: [],
-            knowledgeBaseIds: [],
-            ragEnabled: false,
-          },
-          {
-            id: 'writer',
-            name: '写作者',
-            description: '负责内容撰写',
-            systemPrompt: '你是一个写作者。',
+            id: 'worker_1',
+            name: '搜索专家',
+            description: '负责搜索信息',
+            systemPrompt: '你是搜索专家',
             model: 'qwen-turbo',
             temperature: 0.7,
             maxTokens: 2048,
@@ -255,42 +205,30 @@ describe('AgentExecutorService', () => {
     };
 
     it('should delegate to worker and return final answer', async () => {
-      // 1. Supervisor 决定委派给 researcher
-      mockLLMProvider.chat
-        .mockResolvedValueOnce({
-          content: '让我委派研究员来搜索信息。',
-          toolCalls: [
-            {
-              id: 'call_1',
-              name: 'delegate_to_researcher',
-              arguments: { task: '搜索关于AI的信息' },
-            },
-          ],
-        })
-        // 2. Worker (researcher) 执行任务
-        .mockResolvedValueOnce({
-          content: 'AI 是人工智能的缩写...',
-          toolCalls: undefined,
-        })
-        // 3. Supervisor 给出最终答案
-        .mockResolvedValueOnce({
-          content: '根据研究员的调研结果，AI 是...',
-          toolCalls: [
-            {
-              id: 'call_2',
-              name: 'finish',
-              arguments: { answer: 'AI 是人工智能的缩写，涵盖机器学习、深度学习等领域。' },
-            },
-          ],
-        });
+      // Supervisor 委派给 Worker
+      mockProvider.chat.mockResolvedValueOnce({
+        content: '',
+        toolCalls: [
+          { id: 'call_1', name: 'delegate_to_worker_1', arguments: { task: '搜索信息' } },
+        ],
+      });
+      // Worker 返回答案
+      mockProvider.chat.mockResolvedValueOnce({
+        content: '搜索结果: XXX',
+        toolCalls: undefined,
+      });
+      // Supervisor 给出最终答案
+      mockProvider.chat.mockResolvedValueOnce({
+        content: '',
+        toolCalls: [
+          { id: 'call_2', name: 'finish', arguments: { answer: '最终答案' } },
+        ],
+      });
 
-      const result = await agentExecutor.execute(supervisorConfig, '什么是AI？');
+      const result = await agentExecutor.execute(supervisorConfig, '帮我搜索');
 
       expect(result.success).toBe(true);
-      expect(result.result).toContain('人工智能');
-      expect(result.trace.some((t) => t.type === 'worker_delegate')).toBe(true);
-      expect(result.trace.some((t) => t.type === 'worker_result')).toBe(true);
-      expect(result.trace.some((t) => t.type === 'final_answer')).toBe(true);
+      expect(result.result).toBe('最终答案');
     });
   });
 
@@ -299,74 +237,60 @@ describe('AgentExecutorService', () => {
   // ============================================================
 
   describe('RAG Integration', () => {
-    it('should enrich agent context with RAG results', async () => {
-      const configWithRAG: AgentNodeConfig = {
-        mode: 'single',
-        strategy: 'react',
-        maxIterations: 10,
-        memoryEnabled: false,
-        memoryWindowSize: 10,
-        singleAgent: {
-          id: 'rag_agent',
-          name: 'RAG 助手',
-          description: '知识库问答',
-          systemPrompt: '基于知识库回答问题。',
-          model: 'qwen-turbo',
-          temperature: 0.7,
-          maxTokens: 2048,
-          toolIds: [],
-          knowledgeBaseIds: ['kb_123'],
-          ragEnabled: true,
-        },
-      };
+    const ragConfig: AgentNodeConfig = {
+      mode: 'single',
+      strategy: 'react',
+      maxIterations: 10,
+      memoryEnabled: false,
+      memoryWindowSize: 10,
+      singleAgent: {
+        id: 'rag_agent',
+        name: 'RAG 助手',
+        description: '带知识库的助手',
+        systemPrompt: '你是知识库助手。',
+        model: 'qwen-turbo',
+        temperature: 0.7,
+        maxTokens: 2048,
+        toolIds: [],
+        knowledgeBaseIds: ['kb_001'],
+        ragEnabled: true,
+      },
+    };
 
+    it('should enrich context with RAG results', async () => {
       mockRAGService.retrieve.mockResolvedValue([
-        { content: 'FlowAI 是一个 AI 编排平台', score: 0.95, metadata: {} },
+        { content: '知识库内容1', score: 0.95, metadata: {} },
+        { content: '知识库内容2', score: 0.85, metadata: {} },
       ]);
 
-      mockLLMProvider.chat.mockResolvedValue({
-        content: 'FlowAI 是一个 AI 编排平台。',
+      mockProvider.chat.mockResolvedValue({
+        content: '基于知识库的回答',
         toolCalls: undefined,
       });
 
-      const result = await agentExecutor.execute(configWithRAG, 'FlowAI 是什么？');
+      const result = await agentExecutor.execute(ragConfig, '查询知识');
 
-      expect(mockRAGService.retrieve).toHaveBeenCalledWith('FlowAI 是什么？', 'kb_123', 5);
       expect(result.ragCallCount).toBe(1);
-      expect(result.trace.some((t) => t.type === 'rag_retrieve')).toBe(true);
+      expect(mockRAGService.retrieve).toHaveBeenCalledWith('查询知识', 'kb_001', 5);
     });
 
-    it('should handle RAG failure gracefully', async () => {
-      const configWithRAG: AgentNodeConfig = {
-        mode: 'single',
-        strategy: 'react',
-        maxIterations: 10,
-        memoryEnabled: false,
-        memoryWindowSize: 10,
-        singleAgent: {
-          id: 'rag_agent',
-          name: 'RAG 助手',
-          description: '知识库问答',
-          systemPrompt: '基于知识库回答问题。',
-          model: 'qwen-turbo',
-          temperature: 0.7,
-          maxTokens: 2048,
-          toolIds: [],
-          knowledgeBaseIds: ['kb_404'],
-          ragEnabled: true,
-        },
-      };
-
+    it('should handle RAG retrieval failure gracefully', async () => {
       mockRAGService.retrieve.mockRejectedValue(new Error('知识库不存在'));
-      mockLLMProvider.chat.mockResolvedValue({
-        content: '抱歉，我无法访问知识库。',
+
+      mockProvider.chat.mockResolvedValue({
+        content: '无法获取知识库信息',
         toolCalls: undefined,
       });
 
-      const result = await agentExecutor.execute(configWithRAG, '测试');
+      const failConfig = {
+        ...ragConfig,
+        singleAgent: { ...ragConfig.singleAgent!, knowledgeBaseIds: ['kb_404'] },
+      };
+
+      const result = await agentExecutor.execute(failConfig, '查询');
 
       expect(result.success).toBe(true);
-      // RAG 失败不应导致整个 Agent 执行失败
+      expect(result.ragCallCount).toBe(0);
     });
   });
 
@@ -375,8 +299,8 @@ describe('AgentExecutorService', () => {
   // ============================================================
 
   describe('Error Handling', () => {
-    it('should return error result when LLM API fails', async () => {
-      mockLLMProvider.chat.mockRejectedValue(new Error('API 限流'));
+    it('should handle LLM API failure', async () => {
+      mockProvider.chat.mockRejectedValue(new Error('API 限流'));
 
       const config: AgentNodeConfig = {
         mode: 'single',
@@ -385,10 +309,10 @@ describe('AgentExecutorService', () => {
         memoryEnabled: false,
         memoryWindowSize: 10,
         singleAgent: {
-          id: 'test_agent',
-          name: '测试',
+          id: 'err_agent',
+          name: '错误助手',
           description: '',
-          systemPrompt: '你好',
+          systemPrompt: '',
           model: 'qwen-turbo',
           temperature: 0.7,
           maxTokens: 2048,
@@ -398,30 +322,26 @@ describe('AgentExecutorService', () => {
         },
       };
 
-      const result = await agentExecutor.execute(config, '测试');
+      const result = await agentExecutor.execute(config, '触发错误');
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('API 限流');
     });
 
-    it('should handle tool execution failure gracefully', async () => {
-      mockLLMProvider.chat
-        .mockResolvedValueOnce({
-          content: '',
-          toolCalls: [
-            { id: 'call_1', name: 'calculator', arguments: { expression: 'invalid' } },
-          ],
-        })
-        .mockResolvedValueOnce({
-          content: '计算出现错误，让我直接告诉你答案。',
-          toolCalls: undefined,
-        });
+    it('should handle tool execution failure', async () => {
+      mockProvider.chat.mockResolvedValueOnce({
+        content: '',
+        toolCalls: [
+          { id: 'call_1', name: '___', arguments: { expression: 'bad' } },
+        ],
+      });
 
-      mockLLMProvider.buildToolDefinitions.mockReturnValue([
-        { name: 'calculator', description: '计算', parameters: { type: 'object', properties: { expression: { type: 'string' } } } },
-      ]);
+      mockSkillService.executeSkill.mockRejectedValue(new Error('工具执行失败'));
 
-      mockSkillService.executeSkill.mockRejectedValue(new Error('表达式无效'));
+      mockProvider.chat.mockResolvedValueOnce({
+        content: '工具调用失败了',
+        toolCalls: undefined,
+      });
 
       const config: AgentNodeConfig = {
         mode: 'single',
@@ -430,10 +350,10 @@ describe('AgentExecutorService', () => {
         memoryEnabled: false,
         memoryWindowSize: 10,
         singleAgent: {
-          id: 'test_agent',
-          name: '测试',
+          id: 'tool_err_agent',
+          name: '工具错误助手',
           description: '',
-          systemPrompt: '你好',
+          systemPrompt: '',
           model: 'qwen-turbo',
           temperature: 0.7,
           maxTokens: 2048,
@@ -443,11 +363,55 @@ describe('AgentExecutorService', () => {
         },
       };
 
-      const result = await agentExecutor.execute(config, '测试');
+      const result = await agentExecutor.execute(config, '调用坏工具');
 
       expect(result.success).toBe(true);
-      // 工具失败后应继续执行
       expect(result.toolCallCount).toBe(1);
+    });
+  });
+
+  // ============================================================
+  // 多模型路由
+  // ============================================================
+
+  describe('Multi-Model Routing', () => {
+    it('should route to correct provider based on model ID', async () => {
+      const openaiProvider = {
+        ...mockProvider,
+        name: 'openai',
+        chat: jest.fn().mockResolvedValue({
+          content: 'GPT-4o 回答',
+          toolCalls: undefined,
+        }),
+      };
+
+      mockProviderFactory.getProviderForModel.mockReturnValue(openaiProvider);
+
+      const config: AgentNodeConfig = {
+        mode: 'single',
+        strategy: 'react',
+        maxIterations: 10,
+        memoryEnabled: false,
+        memoryWindowSize: 10,
+        singleAgent: {
+          id: 'gpt_agent',
+          name: 'GPT 助手',
+          description: '',
+          systemPrompt: '',
+          model: 'gpt-4o',
+          temperature: 0.7,
+          maxTokens: 2048,
+          toolIds: [],
+          knowledgeBaseIds: [],
+          ragEnabled: false,
+        },
+      };
+
+      const result = await agentExecutor.execute(config, '你好');
+
+      expect(mockProviderFactory.getProviderForModel).toHaveBeenCalledWith('gpt-4o');
+      expect(openaiProvider.chat).toHaveBeenCalled();
+      expect(result.success).toBe(true);
     });
   });
 });

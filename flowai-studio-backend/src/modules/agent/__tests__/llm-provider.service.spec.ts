@@ -1,120 +1,88 @@
 /**
- * LLMProviderService 单元测试
+ * QwenProvider 单元测试
  *
- * Phase 3.1 测试覆盖:
- * - Chat Completion（含工具调用）
+ * 测试覆盖:
+ * - Chat Completion
+ * - 工具调用解析
+ * - API 错误处理
  * - 工具定义构建
- * - 错误处理
+ * - 工具名称清理
  */
-import { LLMProviderService } from '../services/llm-provider.service';
-import { ConfigService } from '@nestjs/config';
+import { QwenProvider } from '../providers/qwen.provider';
 
 // Mock axios
 jest.mock('axios');
-import axios from 'axios';
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const axios = require('axios');
 
-describe('LLMProviderService', () => {
-  let llmProvider: LLMProviderService;
-  let mockConfigService: any;
+describe('QwenProvider', () => {
+  let provider: QwenProvider;
 
   beforeEach(() => {
     jest.clearAllMocks();
-
-    mockConfigService = {
-      get: jest.fn((key: string, defaultValue?: string) => {
-        const config: Record<string, string> = {
-          QWEN_API_KEY: 'test-api-key',
-          QWEN_BASE_URL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        };
-        return config[key] ?? defaultValue;
-      }),
-    };
-
-    llmProvider = new LLMProviderService(mockConfigService);
+    provider = new QwenProvider({
+      apiKey: 'test-api-key',
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      timeout: 30000,
+    });
   });
 
   describe('chat', () => {
     it('should call Qwen API and return response', async () => {
-      mockedAxios.post.mockResolvedValue({
+      axios.post.mockResolvedValue({
         data: {
-          choices: [
-            {
-              message: {
-                content: '你好！我是AI助手。',
-              },
-            },
-          ],
-          usage: {
-            prompt_tokens: 10,
-            completion_tokens: 20,
-            total_tokens: 30,
-          },
+          choices: [{ message: { content: '你好！' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+          model: 'qwen-turbo',
         },
       });
 
-      const result = await llmProvider.chat({
+      const result = await provider.chat({
         messages: [{ role: 'user', content: '你好' }],
+        model: 'qwen-turbo',
       });
 
-      expect(result.content).toBe('你好！我是AI助手。');
-      expect(result.toolCalls).toBeUndefined();
-      expect(result.usage?.totalTokens).toBe(30);
+      expect(result.content).toBe('你好！');
+      expect(result.finishReason).toBe('stop');
+      expect(result.usage?.totalTokens).toBe(15);
     });
 
     it('should parse tool calls from response', async () => {
-      mockedAxios.post.mockResolvedValue({
+      axios.post.mockResolvedValue({
         data: {
-          choices: [
-            {
-              message: {
-                content: '',
-                tool_calls: [
-                  {
-                    id: 'call_123',
-                    function: {
-                      name: 'calculator',
-                      arguments: '{"expression": "2+2"}',
-                    },
-                  },
-                ],
-              },
+          choices: [{
+            message: {
+              content: '',
+              tool_calls: [{
+                id: 'call_123',
+                function: { name: 'calculator', arguments: '{"expression": "1+1"}' },
+              }],
             },
-          ],
-          usage: { prompt_tokens: 50, completion_tokens: 10, total_tokens: 60 },
+            finish_reason: 'tool_calls',
+          }],
+          model: 'qwen-turbo',
         },
       });
 
-      const result = await llmProvider.chat({
-        messages: [{ role: 'user', content: '2+2等于多少' }],
-        tools: [
-          {
-            name: 'calculator',
-            description: '计算数学表达式',
-            parameters: {
-              type: 'object',
-              properties: { expression: { type: 'string' } },
-            },
-          },
-        ],
+      const result = await provider.chat({
+        messages: [{ role: 'user', content: '计算1+1' }],
+        model: 'qwen-turbo',
+        tools: [{ name: 'calculator', description: '计算', parameters: { type: 'object', properties: { expression: { type: 'string' } } } }],
       });
 
       expect(result.toolCalls).toHaveLength(1);
       expect(result.toolCalls![0].name).toBe('calculator');
-      expect(result.toolCalls![0].arguments).toEqual({ expression: '2+2' });
+      expect(result.toolCalls![0].arguments).toEqual({ expression: '1+1' });
     });
 
     it('should handle API errors', async () => {
-      mockedAxios.post.mockRejectedValue({
-        response: { data: { error: { message: 'API rate limit exceeded' } } },
-        message: 'Request failed with status code 429',
+      axios.post.mockRejectedValue({
+        response: { data: { error: { message: 'API 限流' } } },
+        message: 'Request failed',
       });
 
-      await expect(
-        llmProvider.chat({
-          messages: [{ role: 'user', content: '测试' }],
-        }),
-      ).rejects.toThrow('API rate limit exceeded');
+      await expect(provider.chat({
+        messages: [{ role: 'user', content: '测试' }],
+      })).rejects.toThrow('Qwen API call failed');
     });
   });
 
@@ -139,10 +107,10 @@ describe('LLMProviderService', () => {
         },
       ];
 
-      const definitions = llmProvider.buildToolDefinitions(skills);
+      const definitions = provider.buildToolDefinitions(skills);
 
       expect(definitions).toHaveLength(2);
-      expect(definitions[0].name).toBe('___'); // 中文名被替换为下划线
+      expect(definitions[0].name).toMatch(/^[a-zA-Z0-9_]+$/); // 中文名被清理
       expect(definitions[0].parameters.properties.expression).toBeDefined();
       expect(definitions[1].parameters.properties.input).toBeDefined(); // 无 schema 用默认
     });
@@ -152,10 +120,26 @@ describe('LLMProviderService', () => {
         { id: '1', name: 'JSON处理工具', description: '测试', inputSchema: undefined },
       ];
 
-      const definitions = llmProvider.buildToolDefinitions(skills);
+      const definitions = provider.buildToolDefinitions(skills);
 
-      // 中文名应被替换为下划线
+      // 中文名应被替换为合法字符
       expect(definitions[0].name).toMatch(/^[a-zA-Z0-9_]+$/);
+    });
+  });
+
+  describe('estimateTokens', () => {
+    it('should estimate tokens for English text', () => {
+      const tokens = provider.estimateTokens('Hello, world!');
+      expect(tokens).toBeGreaterThan(0);
+    });
+
+    it('should estimate tokens for Chinese text', () => {
+      const tokens = provider.estimateTokens('你好世界');
+      expect(tokens).toBeGreaterThan(0);
+    });
+
+    it('should return 0 for empty string', () => {
+      expect(provider.estimateTokens('')).toBe(0);
     });
   });
 });
