@@ -79,10 +79,50 @@ model Workflow {
   applicationId String
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
+  // 当前版本号（每次发布版本递增）
+  currentVersion Int @default(1)
+
   // 关联
   executions WorkflowExecution[]
+  versions   WorkflowVersion[]
 
   @@map("workflows")
+}
+
+// 工作流版本快照表
+// Phase 4.2: 版本管理 — 快照、回滚、差异对比
+model WorkflowVersion {
+  id String @id @default(uuid())
+
+  // 版本号（在同一工作流内自增）
+  version Int
+
+  // 版本名称/标签（如 "v1.0 发布版"）
+  label String?
+
+  // 版本说明（变更日志）
+  description String?
+
+  // 快照内容（JSON 存储，与 Workflow 一致）
+  nodes     String
+  edges     String
+  variables String?
+
+  // 创建者
+  createdBy String?
+
+  // 是否为发布版本（vs 自动保存的草稿快照）
+  isPublished Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  // 外键
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, version])
+  @@index([workflowId])
+  @@map("workflow_versions")
 }
 
 // 工作流执行记录表
