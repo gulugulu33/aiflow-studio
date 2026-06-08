@@ -6,13 +6,15 @@ import { WorkflowSlice, createWorkflowSlice } from './slices/workflowSlice'
 import { GlobalSlice, createGlobalSlice } from './slices/globalSlice'
 import { RAGSlice, createRAGSlice } from './slices/ragSlice'
 import { SkillSlice, createSkillSlice } from './slices/skillSlice'
+import { TemplateSlice, createTemplateSlice } from './slices/templateSlice'
 
 type StoreState = ReturnType<typeof createUserSlice> &
   ReturnType<typeof createAppSlice> &
   ReturnType<typeof createWorkflowSlice> &
   ReturnType<typeof createGlobalSlice> &
   ReturnType<typeof createRAGSlice> &
-  ReturnType<typeof createSkillSlice>
+  ReturnType<typeof createSkillSlice> &
+  ReturnType<typeof createTemplateSlice>
 
 export const useStore = create<StoreState>()(
   persist(
@@ -23,6 +25,7 @@ export const useStore = create<StoreState>()(
       ...createGlobalSlice(...args),
       ...createRAGSlice(...args),
       ...createSkillSlice(...args),
+      ...createTemplateSlice(...args),
     }),
     {
       name: 'flowai-storage',
@@ -42,3 +45,4 @@ export * from './slices/workflowSlice'
 export * from './slices/globalSlice'
 export * from './slices/ragSlice'
 export * from './slices/skillSlice'
+export * from './slices/templateSlice'

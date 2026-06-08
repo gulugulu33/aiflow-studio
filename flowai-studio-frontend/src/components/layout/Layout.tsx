@@ -11,6 +11,7 @@ import {
   ToolOutlined,
   ApiOutlined,
   BugOutlined,
+  ShopOutlined,
   RadarChartOutlined,
   ThunderboltOutlined,
   CaretDownOutlined,
@@ -26,6 +27,7 @@ const routeMeta: Record<string, { title: string }> = {
   '/knowledge-bases': { title: '知识库' },
   '/tools': { title: '工具管理' },
   '/mcp': { title: 'MCP 服务器' },
+  '/templates': { title: '模板市场' },
   '/debug': { title: '调试中心' },
 }
 
@@ -60,6 +62,11 @@ const Layout: React.FC = () => {
       key: '/mcp',
       icon: <ApiOutlined />,
       label: 'MCP 服务器',
+    },
+    {
+      key: '/templates',
+      icon: <ShopOutlined />,
+      label: '模板市场',
     },
     {
       key: '/debug',

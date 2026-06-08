@@ -26,6 +26,7 @@ model User {
   skills          Skill[]
   chatHistories   ChatHistory[]
   mcpServers      McpServer[]
+  templates       WorkflowTemplate[]
 
   @@map("users")
 }
@@ -123,6 +124,51 @@ model WorkflowVersion {
   @@unique([workflowId, version])
   @@index([workflowId])
   @@map("workflow_versions")
+}
+
+// 工作流模板表
+// Phase 4.3: 模板市场 — 模板 CRUD、分类搜索、一键导入
+model WorkflowTemplate {
+  id String @id @default(uuid())
+
+  // 模板基本信息
+  name        String
+  description String?
+  icon        String?           // 模板图标/封面 URL
+  screenshot  String?           // 工作流截图 URL
+
+  // 分类与标签
+  category String              // 分类: productivity, customer-service, content-creation, data-analysis, education, development, other
+  tags     String              // 标签列表 JSON 数组, 如 '["AI","客服","自动化"]'
+
+  // 快照内容（来自工作流的完整定义）
+  nodes     String
+  edges     String
+  variables String?
+
+  // 统计数据
+  downloadCount Int    @default(0)
+  rating        Float  @default(0)   // 平均评分 0-5
+  ratingCount   Int    @default(0)   // 评分人数
+
+  // 状态: draft(草稿), published(已发布), archived(已下架)
+  status String @default("draft")
+
+  // 是否为官方模板
+  isOfficial Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 外键 — 模板创建者
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([category])
+  @@index([status])
+  @@index([isOfficial])
+  @@index([downloadCount])
+  @@map("workflow_templates")
 }
 
 // 工作流执行记录表

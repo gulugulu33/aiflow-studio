@@ -314,3 +314,55 @@ export interface NodeExecution {
   startedAt?: string
   completedAt?: string
 }
+
+// 模板市场相关类型
+export type TemplateCategory = 'productivity' | 'customer-service' | 'content-creation' | 'data-analysis' | 'education' | 'development' | 'other'
+
+export type TemplateSort = 'newest' | 'popular' | 'rating'
+
+export type TemplateStatus = 'draft' | 'published' | 'archived'
+
+export interface WorkflowTemplate {
+  id: string
+  name: string
+  description?: string
+  icon?: string
+  screenshot?: string
+  category: TemplateCategory
+  tags: string[]
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+  variables?: Record<string, unknown> | null
+  downloadCount: number
+  rating: number
+  ratingCount: number
+  status: TemplateStatus
+  isOfficial: boolean
+  userId: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TemplateListResponse {
+  items: WorkflowTemplate[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface TemplateCategoryCount {
+  category: TemplateCategory
+  count: number
+}
+
+/** 模板分类选项 */
+export const TEMPLATE_CATEGORY_OPTIONS: { label: string; value: TemplateCategory; icon: string }[] = [
+  { label: '生产力', value: 'productivity', icon: '🚀' },
+  { label: '客服', value: 'customer-service', icon: '💬' },
+  { label: '内容创作', value: 'content-creation', icon: '✍️' },
+  { label: '数据分析', value: 'data-analysis', icon: '📊' },
+  { label: '教育', value: 'education', icon: '🎓' },
+  { label: '开发', value: 'development', icon: '💻' },
+  { label: '其他', value: 'other', icon: '📦' },
+]
