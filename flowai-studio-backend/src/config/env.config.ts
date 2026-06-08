@@ -44,6 +44,14 @@ export const envSchema = z.object({
   MILVUS_URL: z.string().default('http://localhost:19530'),
   MILVUS_TOKEN: z.string().optional(),
 
+  // Cohere Rerank 配置
+  COHERE_API_KEY: z.string().optional(),
+  COHERE_BASE_URL: z.string().default('https://api.cohere.com'),
+  COHERE_RERANK_MODEL: z.string().default('rerank-v3.5'),
+
+  // Ollama Rerank 配置
+  OLLAMA_RERANK_MODEL: z.string().default('bge-reranker-v2-m3'),
+
   // 文件上传配置
   UPLOAD_PATH: z.string().default('./uploads'),
   MAX_FILE_SIZE: z.string().default('10485760'),

@@ -1,19 +1,19 @@
-import { IsString, IsOptional, IsNumber, IsIn, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsIn, IsBoolean, Min, Max } from 'class-validator';
 
 /**
  * 创建知识库 DTO
  *
- * Phase 2.2 增强:
- * - 新增 retrievalMode 字段: 支持 vector / keyword / hybrid 三种检索模式
- * - 新增 vectorWeight 字段: 混合检索中向量检索权重（默认 0.7）
- * - 新增 rrfK 字段: RRF 融合常数（默认 60）
- * - 扩展 similarityThreshold: 混合检索中也适用
+ * Phase 2.3 增强:
+ * - 新增 rerankerEnabled 字段: 是否启用重排序
+ * - 新增 rerankerProvider 字段: 重排序 Provider 类型（cohere / ollama / none）
+ * - 新增 rerankerModel 字段: 重排序模型名称
+ * - 新增 rerankerTopN 字段: 重排序后返回的文档数
  *
  * 竞品对标:
- * - Dify: 支持 vector / keyword / hybrid 检索模式，hybrid 支持 RRF 融合
- * - FastGPT: 支持 vector / fullText / hybrid，hybrid 使用权重融合
- * - Coze: 仅向量检索
- * - 本设计: RRF 融合 + 加权 RRF + 自适应降级
+ * - Dify: 支持 Cohere Rerank，不支持本地模型
+ * - FastGPT: 支持 Cohere Rerank，不支持本地模型
+ * - Flowise: 支持 HuggingFace + Cohere Rerank
+ * - 本设计: Cohere + Ollama 本地（零成本 + 数据隐私）+ 工厂模式可扩展
  */
 export class CreateKnowledgeBaseDto {
   @IsString({ message: 'Name must be a string' })
@@ -144,4 +144,65 @@ export class CreateKnowledgeBaseDto {
   @Min(1, { message: 'RRF K must be at least 1' })
   @Max(200, { message: 'RRF K must not exceed 200' })
   rrfK?: number;
+
+  // ──────────────────────────────────────
+  // 重排序配置 (Phase 2.3)
+  // ──────────────────────────────────────
+
+  /**
+   * 是否启用重排序
+   * 启用后，检索结果会经过 Reranker 二次排序，提高 Top-K 精度
+   *
+   * 竞品对标:
+   * - Dify: 支持开关 Rerank
+   * - FastGPT: 支持开关 Rerank
+   * - 本设计: 默认关闭，用户按需开启
+   */
+  @IsOptional()
+  @IsBoolean({ message: 'Reranker enabled must be a boolean' })
+  rerankerEnabled?: boolean;
+
+  /**
+   * Reranker Provider 类型
+   * - cohere: Cohere Rerank API（最强精度，需 API Key）
+   * - ollama: Ollama 本地部署（零成本，数据不出服务器）
+   * - none: 不使用重排序
+   *
+   * 竞品对标:
+   * - Dify: 仅支持 Cohere
+   * - FastGPT: 仅支持 Cohere
+   * - Flowise: 支持 HuggingFace + Cohere
+   * - 本设计: Cohere + Ollama + 工厂模式可扩展第三方
+   */
+  @IsOptional()
+  @IsString({ message: 'Reranker provider must be a string' })
+  @IsIn(['cohere', 'ollama', 'none'], {
+    message: 'Reranker provider must be cohere, ollama, or none',
+  })
+  rerankerProvider?: string;
+
+  /**
+   * Reranker 模型名称
+   * - Cohere: rerank-v3.5 / rerank-english-v3.0 / rerank-multilingual-v3.0
+   * - Ollama: bge-reranker-v2-m3 / bge-reranker-v2-gemma
+   */
+  @IsOptional()
+  @IsString({ message: 'Reranker model must be a string' })
+  rerankerModel?: string;
+
+  /**
+   * 重排序后返回的文档数量
+   * null / undefined 表示不截断，保持与 topK 一致
+   * 建议值: 3-10，减少 LLM 上下文长度
+   *
+   * 竞品对标:
+   * - Dify: 支持 TopN 配置
+   * - FastGPT: 支持 TopN 配置
+   * - 本设计: 默认与 topK 一致，可按需缩减
+   */
+  @IsOptional()
+  @IsNumber({}, { message: 'Reranker topN must be a number' })
+  @Min(1, { message: 'Reranker topN must be at least 1' })
+  @Max(20, { message: 'Reranker topN must not exceed 20' })
+  rerankerTopN?: number;
 }

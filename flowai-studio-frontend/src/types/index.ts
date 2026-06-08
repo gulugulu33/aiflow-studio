@@ -148,6 +148,9 @@ export const VECTOR_STORE_OPTIONS: { label: string; value: VectorStoreType; desc
   { label: 'Milvus', value: 'milvus', description: '分布式向量数据库（适合亿级向量）' },
 ]
 
+/** Reranker Provider 类型 */
+export type RerankerProviderType = 'cohere' | 'ollama' | 'none'
+
 export interface KnowledgeBase {
   id: string
   name: string
@@ -164,6 +167,11 @@ export interface KnowledgeBase {
   retrievalMode: 'vector' | 'keyword' | 'hybrid'
   vectorWeight: number
   rrfK: number
+  // Phase 2.3: Reranker 配置
+  rerankerEnabled: boolean
+  rerankerProvider: RerankerProviderType
+  rerankerModel: string
+  rerankerTopN?: number
   userId: string
   createdAt: string
   updatedAt: string
@@ -175,6 +183,26 @@ export const RETRIEVAL_MODE_OPTIONS: { label: string; value: KnowledgeBase['retr
   { label: '向量检索', value: 'vector', description: '语义匹配，适合同义词、语义关联场景', color: '#1677ff' },
   { label: '关键词检索', value: 'keyword', description: 'BM25 精确匹配，适合专有名词、编号场景', color: '#52c41a' },
   { label: '混合检索', value: 'hybrid', description: '向量+关键词 RRF 融合，推荐生产使用', color: '#722ed1' },
+]
+
+/** Reranker Provider 选项 */
+export const RERANKER_PROVIDER_OPTIONS: { label: string; value: RerankerProviderType; description: string; color: string }[] = [
+  { label: '不使用', value: 'none', description: '不使用重排序，返回原始检索结果', color: '#8c8c8c' },
+  { label: 'Cohere Rerank', value: 'cohere', description: '业界最强重排序 API，支持多语言（需 API Key）', color: '#1677ff' },
+  { label: 'Ollama 本地', value: 'ollama', description: '本地部署重排序模型，零 API 成本，数据不出服务器', color: '#52c41a' },
+]
+
+/** Cohere Reranker 可选模型 */
+export const COHERE_RERANK_MODELS = [
+  { label: 'rerank-v3.5（推荐）', value: 'rerank-v3.5' },
+  { label: 'rerank-english-v3.0（英文）', value: 'rerank-english-v3.0' },
+  { label: 'rerank-multilingual-v3.0（多语言）', value: 'rerank-multilingual-v3.0' },
+]
+
+/** Ollama Reranker 可选模型 */
+export const OLLAMA_RERANK_MODELS = [
+  { label: 'bge-reranker-v2-m3（推荐，多语言）', value: 'bge-reranker-v2-m3' },
+  { label: 'bge-reranker-v2-gemma（更高精度）', value: 'bge-reranker-v2-gemma' },
 ]
 
 export interface Document {
