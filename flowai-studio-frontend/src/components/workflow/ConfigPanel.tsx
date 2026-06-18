@@ -262,9 +262,17 @@ const ConfigPanel: React.FC = () => {
     }
 
     const commonFields = (
-      <Form.Item name="label" label="节点名称">
-        <Input placeholder="输入节点名称" />
-      </Form.Item>
+      <>
+        <div style={{ marginBottom: 12 }}>
+          <Text type="secondary">节点 ID（用于变量引用）：</Text>
+          <div style={{ padding: '4px 8px', background: '#f5f5f5', borderRadius: 4, fontFamily: 'monospace', fontSize: 12, userSelect: 'all' }}>
+            {selectedNode.id}
+          </div>
+        </div>
+        <Form.Item name="label" label="节点名称">
+          <Input placeholder="输入节点名称" />
+        </Form.Item>
+      </>
     )
 
     switch (selectedNode.type) {
